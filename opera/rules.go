@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	ethparams "github.com/ethereum/go-ethereum/params"
 
-	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/opera/genesis/evmwriter"
+	"github.com/making-choice-personal/volary-lachesis/inter"
+	"github.com/making-choice-personal/volary-lachesis/opera/genesis/evmwriter"
 )
 
 const (

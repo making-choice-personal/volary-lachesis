@@ -10,9 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/gossip/gasprice"
-	"github.com/Fantom-foundation/go-opera/opera"
+	"github.com/making-choice-personal/volary-lachesis/evmcore"
+	"github.com/making-choice-personal/volary-lachesis/gossip/gasprice"
+	"github.com/making-choice-personal/volary-lachesis/opera"
 )
 
 var (

@@ -4,7 +4,7 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/emitter/ancestor"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 
-	"github.com/Fantom-foundation/go-opera/utils/piecefunc"
+	"github.com/making-choice-personal/volary-lachesis/utils/piecefunc"
 )
 
 var (

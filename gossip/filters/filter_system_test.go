@@ -34,10 +34,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
-	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
-	"github.com/Fantom-foundation/go-opera/integration/makegenesis"
-	"github.com/Fantom-foundation/go-opera/topicsdb"
+	"github.com/making-choice-personal/volary-lachesis/evmcore"
+	"github.com/making-choice-personal/volary-lachesis/gossip/evmstore"
+	"github.com/making-choice-personal/volary-lachesis/integration/makegenesis"
+	"github.com/making-choice-personal/volary-lachesis/topicsdb"
 )
 
 type testBackend struct {

@@ -15,12 +15,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
-	"github.com/Fantom-foundation/go-opera/gossip"
-	"github.com/Fantom-foundation/go-opera/integration/makegenesis"
-	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/opera/genesisstore"
-	"github.com/Fantom-foundation/go-opera/utils"
-	"github.com/Fantom-foundation/go-opera/vecmt"
+	"github.com/making-choice-personal/volary-lachesis/gossip"
+	"github.com/making-choice-personal/volary-lachesis/integration/makegenesis"
+	"github.com/making-choice-personal/volary-lachesis/inter"
+	"github.com/making-choice-personal/volary-lachesis/opera/genesisstore"
+	"github.com/making-choice-personal/volary-lachesis/utils"
+	"github.com/making-choice-personal/volary-lachesis/vecmt"
 )
 
 func BenchmarkFlushDBs(b *testing.B) {

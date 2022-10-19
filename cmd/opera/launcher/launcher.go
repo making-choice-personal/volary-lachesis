@@ -21,17 +21,17 @@ import (
 
 	evmetrics "github.com/ethereum/go-ethereum/metrics"
 
-	"github.com/Fantom-foundation/go-opera/cmd/opera/launcher/metrics"
-	"github.com/Fantom-foundation/go-opera/cmd/opera/launcher/tracing"
-	"github.com/Fantom-foundation/go-opera/debug"
-	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/flags"
-	"github.com/Fantom-foundation/go-opera/gossip"
-	"github.com/Fantom-foundation/go-opera/gossip/emitter"
-	"github.com/Fantom-foundation/go-opera/integration"
-	"github.com/Fantom-foundation/go-opera/utils/errlock"
-	"github.com/Fantom-foundation/go-opera/valkeystore"
-	_ "github.com/Fantom-foundation/go-opera/version"
+	"github.com/making-choice-personal/volary-lachesis/cmd/opera/launcher/metrics"
+	"github.com/making-choice-personal/volary-lachesis/cmd/opera/launcher/tracing"
+	"github.com/making-choice-personal/volary-lachesis/debug"
+	"github.com/making-choice-personal/volary-lachesis/evmcore"
+	"github.com/making-choice-personal/volary-lachesis/flags"
+	"github.com/making-choice-personal/volary-lachesis/gossip"
+	"github.com/making-choice-personal/volary-lachesis/gossip/emitter"
+	"github.com/making-choice-personal/volary-lachesis/integration"
+	"github.com/making-choice-personal/volary-lachesis/utils/errlock"
+	"github.com/making-choice-personal/volary-lachesis/valkeystore"
+	_ "github.com/making-choice-personal/volary-lachesis/version"
 )
 
 const (

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Fantom-foundation/go-opera/integration/makegenesis"
+	"github.com/making-choice-personal/volary-lachesis/integration/makegenesis"
 
 	"github.com/ethereum/go-ethereum/params"
 )

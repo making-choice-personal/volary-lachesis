@@ -5,10 +5,10 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
-	"github.com/Fantom-foundation/go-opera/opera"
+	"github.com/making-choice-personal/volary-lachesis/evmcore"
+	"github.com/making-choice-personal/volary-lachesis/inter"
+	"github.com/making-choice-personal/volary-lachesis/inter/iblockproc"
+	"github.com/making-choice-personal/volary-lachesis/opera"
 )
 
 type TxListener interface {

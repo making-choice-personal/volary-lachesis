@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/Fantom-foundation/go-opera/utils/fast"
+	"github.com/making-choice-personal/volary-lachesis/utils/fast"
 )
 
 func TestEmpty(t *testing.T) {

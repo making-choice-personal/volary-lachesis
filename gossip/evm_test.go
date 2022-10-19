@@ -12,9 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/Fantom-foundation/go-opera/gossip/contract/ballot"
-	"github.com/Fantom-foundation/go-opera/logger"
-	"github.com/Fantom-foundation/go-opera/utils"
+	"github.com/making-choice-personal/volary-lachesis/gossip/contract/ballot"
+	"github.com/making-choice-personal/volary-lachesis/logger"
+	"github.com/making-choice-personal/volary-lachesis/utils"
 )
 
 func BenchmarkBallotTxsProcessing(b *testing.B) {

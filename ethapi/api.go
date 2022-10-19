@@ -46,11 +46,11 @@ import (
 	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tyler-smith/go-bip39"
 
-	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/gossip/gasprice"
-	"github.com/Fantom-foundation/go-opera/opera"
-	"github.com/Fantom-foundation/go-opera/utils/gsignercache"
-	"github.com/Fantom-foundation/go-opera/utils/piecefunc"
+	"github.com/making-choice-personal/volary-lachesis/evmcore"
+	"github.com/making-choice-personal/volary-lachesis/gossip/gasprice"
+	"github.com/making-choice-personal/volary-lachesis/opera"
+	"github.com/making-choice-personal/volary-lachesis/utils/gsignercache"
+	"github.com/making-choice-personal/volary-lachesis/utils/piecefunc"
 )
 
 var (

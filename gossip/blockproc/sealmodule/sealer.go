@@ -7,8 +7,8 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 	"github.com/Fantom-foundation/lachesis-base/lachesis"
 
-	"github.com/Fantom-foundation/go-opera/gossip/blockproc"
-	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
+	"github.com/making-choice-personal/volary-lachesis/gossip/blockproc"
+	"github.com/making-choice-personal/volary-lachesis/inter/iblockproc"
 )
 
 type OperaEpochsSealerModule struct{}

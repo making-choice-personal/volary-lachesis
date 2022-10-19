@@ -1,10 +1,10 @@
 package gpos
 
 import (
-	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/making-choice-personal/volary-lachesis/inter"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/Fantom-foundation/go-opera/inter/validatorpk"
+	"github.com/making-choice-personal/volary-lachesis/inter/validatorpk"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 )
 

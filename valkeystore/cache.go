@@ -3,8 +3,8 @@ package valkeystore
 import (
 	"errors"
 
-	"github.com/Fantom-foundation/go-opera/inter/validatorpk"
-	"github.com/Fantom-foundation/go-opera/valkeystore/encryption"
+	"github.com/making-choice-personal/volary-lachesis/inter/validatorpk"
+	"github.com/making-choice-personal/volary-lachesis/valkeystore/encryption"
 )
 
 var (

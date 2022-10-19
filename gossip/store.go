@@ -14,12 +14,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
-	"github.com/Fantom-foundation/go-opera/gossip/sfcapi"
-	"github.com/Fantom-foundation/go-opera/logger"
-	"github.com/Fantom-foundation/go-opera/utils/adapters/snap2kvdb"
-	"github.com/Fantom-foundation/go-opera/utils/rlpstore"
-	"github.com/Fantom-foundation/go-opera/utils/switchable"
+	"github.com/making-choice-personal/volary-lachesis/gossip/evmstore"
+	"github.com/making-choice-personal/volary-lachesis/gossip/sfcapi"
+	"github.com/making-choice-personal/volary-lachesis/logger"
+	"github.com/making-choice-personal/volary-lachesis/utils/adapters/snap2kvdb"
+	"github.com/making-choice-personal/volary-lachesis/utils/rlpstore"
+	"github.com/making-choice-personal/volary-lachesis/utils/switchable"
 )
 
 // Store is a node persistent storage working over physical key-value database.

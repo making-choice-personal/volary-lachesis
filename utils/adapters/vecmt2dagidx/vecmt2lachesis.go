@@ -7,7 +7,7 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/vecfc"
 
-	"github.com/Fantom-foundation/go-opera/vecmt"
+	"github.com/making-choice-personal/volary-lachesis/vecmt"
 )
 
 type Adapter struct {

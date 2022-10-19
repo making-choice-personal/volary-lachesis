@@ -1,7 +1,7 @@
 package evallcheck
 
 import (
-	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/making-choice-personal/volary-lachesis/inter"
 )
 
 type Checker struct {

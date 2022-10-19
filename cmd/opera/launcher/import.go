@@ -23,11 +23,11 @@ import (
 	"github.com/status-im/keycard-go/hexutils"
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/Fantom-foundation/go-opera/gossip"
-	"github.com/Fantom-foundation/go-opera/gossip/emitter"
-	"github.com/Fantom-foundation/go-opera/integration"
-	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/utils/ioread"
+	"github.com/making-choice-personal/volary-lachesis/gossip"
+	"github.com/making-choice-personal/volary-lachesis/gossip/emitter"
+	"github.com/making-choice-personal/volary-lachesis/integration"
+	"github.com/making-choice-personal/volary-lachesis/inter"
+	"github.com/making-choice-personal/volary-lachesis/utils/ioread"
 )
 
 func importEvm(ctx *cli.Context) error {

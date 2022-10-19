@@ -18,11 +18,11 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/status-im/keycard-go/hexutils"
 
-	"github.com/Fantom-foundation/go-opera/gossip"
-	"github.com/Fantom-foundation/go-opera/opera"
-	"github.com/Fantom-foundation/go-opera/opera/genesisstore"
-	"github.com/Fantom-foundation/go-opera/utils/adapters/vecmt2dagidx"
-	"github.com/Fantom-foundation/go-opera/vecmt"
+	"github.com/making-choice-personal/volary-lachesis/gossip"
+	"github.com/making-choice-personal/volary-lachesis/opera"
+	"github.com/making-choice-personal/volary-lachesis/opera/genesisstore"
+	"github.com/making-choice-personal/volary-lachesis/utils/adapters/vecmt2dagidx"
+	"github.com/making-choice-personal/volary-lachesis/vecmt"
 )
 
 var (

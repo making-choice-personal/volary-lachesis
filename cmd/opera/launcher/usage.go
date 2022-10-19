@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	cli "gopkg.in/urfave/cli.v1"
 
-	"github.com/Fantom-foundation/go-opera/debug"
-	"github.com/Fantom-foundation/go-opera/flags"
+	"github.com/making-choice-personal/volary-lachesis/debug"
+	"github.com/making-choice-personal/volary-lachesis/flags"
 )
 
 // AppHelpFlagGroups is the application flags, grouped by functionality.

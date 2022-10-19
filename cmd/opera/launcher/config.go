@@ -23,16 +23,16 @@ import (
 	"github.com/naoina/toml"
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/gossip"
-	"github.com/Fantom-foundation/go-opera/gossip/emitter"
-	"github.com/Fantom-foundation/go-opera/gossip/gasprice"
-	"github.com/Fantom-foundation/go-opera/integration"
-	"github.com/Fantom-foundation/go-opera/integration/makegenesis"
-	"github.com/Fantom-foundation/go-opera/opera"
-	"github.com/Fantom-foundation/go-opera/opera/genesisstore"
-	futils "github.com/Fantom-foundation/go-opera/utils"
-	"github.com/Fantom-foundation/go-opera/vecmt"
+	"github.com/making-choice-personal/volary-lachesis/evmcore"
+	"github.com/making-choice-personal/volary-lachesis/gossip"
+	"github.com/making-choice-personal/volary-lachesis/gossip/emitter"
+	"github.com/making-choice-personal/volary-lachesis/gossip/gasprice"
+	"github.com/making-choice-personal/volary-lachesis/integration"
+	"github.com/making-choice-personal/volary-lachesis/integration/makegenesis"
+	"github.com/making-choice-personal/volary-lachesis/opera"
+	"github.com/making-choice-personal/volary-lachesis/opera/genesisstore"
+	futils "github.com/making-choice-personal/volary-lachesis/utils"
+	"github.com/making-choice-personal/volary-lachesis/vecmt"
 )
 
 var (
