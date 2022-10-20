@@ -10,8 +10,8 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/lachesis"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/opera"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/opera"
 )
 
 type ValidatorBlockState struct {

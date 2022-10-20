@@ -13,10 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 
-	"github.com/making-choice-personal/volary-lachesis/evmcore"
-	"github.com/making-choice-personal/volary-lachesis/integration/makegenesis"
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/utils"
+	"github.com/Fantom-foundation/go-opera/evmcore"
+	"github.com/Fantom-foundation/go-opera/integration/makegenesis"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/utils"
 )
 
 const (

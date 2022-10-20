@@ -7,7 +7,7 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/hash"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 
-	"github.com/making-choice-personal/volary-lachesis/utils/concurrent"
+	"github.com/Fantom-foundation/go-opera/utils/concurrent"
 )
 
 type sortedHead []byte

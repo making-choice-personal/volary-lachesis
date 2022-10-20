@@ -8,8 +8,8 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/utils/adapters/vecmt2dagidx"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/utils/adapters/vecmt2dagidx"
 )
 
 // OnNewEpoch should be called after each epoch change, and on startup

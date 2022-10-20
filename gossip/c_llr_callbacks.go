@@ -8,11 +8,11 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/making-choice-personal/volary-lachesis/eventcheck"
-	"github.com/making-choice-personal/volary-lachesis/gossip/evmstore"
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/ibr"
-	"github.com/making-choice-personal/volary-lachesis/inter/ier"
+	"github.com/Fantom-foundation/go-opera/eventcheck"
+	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/ibr"
+	"github.com/Fantom-foundation/go-opera/inter/ier"
 )
 
 func actualizeLowestIndex(current, upd uint64, exists func(uint64) bool) uint64 {

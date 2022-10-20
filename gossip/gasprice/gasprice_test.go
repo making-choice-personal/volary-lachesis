@@ -7,7 +7,7 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/stretchr/testify/require"
 
-	"github.com/making-choice-personal/volary-lachesis/opera"
+	"github.com/Fantom-foundation/go-opera/opera"
 )
 
 type TestBackend struct {

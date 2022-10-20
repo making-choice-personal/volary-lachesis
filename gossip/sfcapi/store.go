@@ -4,8 +4,8 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/kvdb"
 	"github.com/Fantom-foundation/lachesis-base/kvdb/table"
 
-	"github.com/making-choice-personal/volary-lachesis/logger"
-	"github.com/making-choice-personal/volary-lachesis/utils/rlpstore"
+	"github.com/Fantom-foundation/go-opera/logger"
+	"github.com/Fantom-foundation/go-opera/utils/rlpstore"
 )
 
 // Store is a node persistent storage working over physical key-value database.

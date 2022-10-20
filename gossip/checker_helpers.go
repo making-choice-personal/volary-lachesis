@@ -6,10 +6,10 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 
-	"github.com/making-choice-personal/volary-lachesis/eventcheck/gaspowercheck"
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/validatorpk"
-	"github.com/making-choice-personal/volary-lachesis/opera"
+	"github.com/Fantom-foundation/go-opera/eventcheck/gaspowercheck"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/validatorpk"
+	"github.com/Fantom-foundation/go-opera/opera"
 )
 
 // GasPowerCheckReader is a helper to run gas power check

@@ -12,17 +12,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/validatorpk"
-	"github.com/making-choice-personal/volary-lachesis/opera"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/driver"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/driverauth"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/evmwriter"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/gpos"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/netinit"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/sfc"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesisstore"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/validatorpk"
+	"github.com/Fantom-foundation/go-opera/opera"
+	"github.com/Fantom-foundation/go-opera/opera/genesis"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/driver"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/driverauth"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/evmwriter"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/gpos"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/netinit"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/sfc"
+	"github.com/Fantom-foundation/go-opera/opera/genesisstore"
 )
 
 var (

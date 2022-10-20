@@ -11,11 +11,11 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/lachesis"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/iblockproc"
-	"github.com/making-choice-personal/volary-lachesis/opera"
-	"github.com/making-choice-personal/volary-lachesis/utils/concurrent"
-	"github.com/making-choice-personal/volary-lachesis/utils/migration"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
+	"github.com/Fantom-foundation/go-opera/opera"
+	"github.com/Fantom-foundation/go-opera/utils/concurrent"
+	"github.com/Fantom-foundation/go-opera/utils/migration"
 )
 
 func isEmptyDB(db kvdb.Iteratee) bool {

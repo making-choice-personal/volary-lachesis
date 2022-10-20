@@ -25,8 +25,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 
-	"github.com/making-choice-personal/volary-lachesis/opera"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis"
+	"github.com/Fantom-foundation/go-opera/opera"
+	"github.com/Fantom-foundation/go-opera/opera/genesis"
 )
 
 // ApplyGenesis writes or updates the genesis block in db.

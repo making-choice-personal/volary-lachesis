@@ -18,15 +18,15 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 
-	"github.com/making-choice-personal/volary-lachesis/evmcore"
-	"github.com/making-choice-personal/volary-lachesis/gossip/blockproc/verwatcher"
-	"github.com/making-choice-personal/volary-lachesis/gossip/emitter"
-	"github.com/making-choice-personal/volary-lachesis/gossip/evmstore"
-	"github.com/making-choice-personal/volary-lachesis/gossip/sfcapi"
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/iblockproc"
-	"github.com/making-choice-personal/volary-lachesis/opera"
-	"github.com/making-choice-personal/volary-lachesis/utils"
+	"github.com/Fantom-foundation/go-opera/evmcore"
+	"github.com/Fantom-foundation/go-opera/gossip/blockproc/verwatcher"
+	"github.com/Fantom-foundation/go-opera/gossip/emitter"
+	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
+	"github.com/Fantom-foundation/go-opera/gossip/sfcapi"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
+	"github.com/Fantom-foundation/go-opera/opera"
+	"github.com/Fantom-foundation/go-opera/utils"
 )
 
 var (

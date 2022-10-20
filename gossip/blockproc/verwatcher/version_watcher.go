@@ -8,11 +8,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 
-	"github.com/making-choice-personal/volary-lachesis/logger"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/driver"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/driver/driverpos"
-	"github.com/making-choice-personal/volary-lachesis/utils/errlock"
-	"github.com/making-choice-personal/volary-lachesis/version"
+	"github.com/Fantom-foundation/go-opera/logger"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/driver"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/driver/driverpos"
+	"github.com/Fantom-foundation/go-opera/utils/errlock"
+	"github.com/Fantom-foundation/go-opera/version"
 )
 
 type VerWarcher struct {

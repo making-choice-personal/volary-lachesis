@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/making-choice-personal/volary-lachesis/utils/gsignercache"
+	"github.com/Fantom-foundation/go-opera/utils/gsignercache"
 )
 
 const (

@@ -36,17 +36,17 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/making-choice-personal/volary-lachesis/gossip/contract/driver100"
-	"github.com/making-choice-personal/volary-lachesis/gossip/contract/driverauth100"
-	"github.com/making-choice-personal/volary-lachesis/gossip/contract/netinit100"
-	"github.com/making-choice-personal/volary-lachesis/gossip/contract/sfc100"
-	"github.com/making-choice-personal/volary-lachesis/logger"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/driver"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/driverauth"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/evmwriter"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/netinit"
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/sfc"
-	"github.com/making-choice-personal/volary-lachesis/utils"
+	"github.com/Fantom-foundation/go-opera/gossip/contract/driver100"
+	"github.com/Fantom-foundation/go-opera/gossip/contract/driverauth100"
+	"github.com/Fantom-foundation/go-opera/gossip/contract/netinit100"
+	"github.com/Fantom-foundation/go-opera/gossip/contract/sfc100"
+	"github.com/Fantom-foundation/go-opera/logger"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/driver"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/driverauth"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/evmwriter"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/netinit"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/sfc"
+	"github.com/Fantom-foundation/go-opera/utils"
 )
 
 func TestSFC(t *testing.T) {

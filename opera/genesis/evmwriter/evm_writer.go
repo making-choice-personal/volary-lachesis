@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/making-choice-personal/volary-lachesis/opera/genesis/driver"
+	"github.com/Fantom-foundation/go-opera/opera/genesis/driver"
 )
 
 var (

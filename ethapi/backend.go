@@ -34,9 +34,9 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 
-	"github.com/making-choice-personal/volary-lachesis/evmcore"
-	"github.com/making-choice-personal/volary-lachesis/gossip/sfcapi"
-	"github.com/making-choice-personal/volary-lachesis/inter"
+	"github.com/Fantom-foundation/go-opera/evmcore"
+	"github.com/Fantom-foundation/go-opera/gossip/sfcapi"
+	"github.com/Fantom-foundation/go-opera/inter"
 )
 
 // PeerProgress is synchronization status of a peer

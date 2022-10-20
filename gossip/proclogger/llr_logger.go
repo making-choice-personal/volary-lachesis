@@ -7,11 +7,11 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/hash"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/ibr"
-	"github.com/making-choice-personal/volary-lachesis/inter/ier"
-	"github.com/making-choice-personal/volary-lachesis/logger"
-	"github.com/making-choice-personal/volary-lachesis/utils"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/ibr"
+	"github.com/Fantom-foundation/go-opera/inter/ier"
+	"github.com/Fantom-foundation/go-opera/logger"
+	"github.com/Fantom-foundation/go-opera/utils"
 )
 
 type dagSum struct {

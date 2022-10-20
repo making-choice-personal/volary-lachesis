@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/making-choice-personal/volary-lachesis/cmd/opera/launcher"
+	"github.com/Fantom-foundation/go-opera/cmd/opera/launcher"
 )
 
 func main() {

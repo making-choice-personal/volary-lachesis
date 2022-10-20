@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/making-choice-personal/volary-lachesis/utils/cser"
+	"github.com/Fantom-foundation/go-opera/utils/cser"
 )
 
 var (

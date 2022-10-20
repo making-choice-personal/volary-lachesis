@@ -32,8 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/making-choice-personal/volary-lachesis/topicsdb"
-	"github.com/making-choice-personal/volary-lachesis/utils/adapters/ethdb2kvdb"
+	"github.com/Fantom-foundation/go-opera/topicsdb"
+	"github.com/Fantom-foundation/go-opera/utils/adapters/ethdb2kvdb"
 )
 
 func testConfig() Config {

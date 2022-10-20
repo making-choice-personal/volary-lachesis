@@ -1,4 +1,4 @@
-module github.com/making-choice-personal/volary-lachesis
+module github.com/Fantom-foundation/go-opera
 
 go 1.14
 

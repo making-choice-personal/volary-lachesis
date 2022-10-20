@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 
-	"github.com/making-choice-personal/volary-lachesis/gossip/evmstore"
+	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
 )
 
 const (

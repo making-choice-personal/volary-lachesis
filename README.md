@@ -101,27 +101,27 @@ go test ./...
 
 If everything goes well, it should output something along these lines:
 ```
-ok  	github.com/making-choice-personal/volary-lachesis/app	0.033s
-?   	github.com/making-choice-personal/volary-lachesis/cmd/cmdtest	[no test files]
-ok  	github.com/making-choice-personal/volary-lachesis/cmd/opera	13.890s
-?   	github.com/making-choice-personal/volary-lachesis/cmd/opera/metrics	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/cmd/opera/tracing	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/crypto	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/debug	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/ethapi	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/eventcheck	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/eventcheck/basiccheck	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/eventcheck/gaspowercheck	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/eventcheck/heavycheck	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/eventcheck/parentscheck	[no test files]
-ok  	github.com/making-choice-personal/volary-lachesis/evmcore	6.322s
-?   	github.com/making-choice-personal/volary-lachesis/gossip	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/gossip/emitter	[no test files]
-ok  	github.com/making-choice-personal/volary-lachesis/gossip/filters	1.250s
-?   	github.com/making-choice-personal/volary-lachesis/gossip/gasprice	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/gossip/occuredtxs	[no test files]
-?   	github.com/making-choice-personal/volary-lachesis/gossip/piecefunc	[no test files]
-ok  	github.com/making-choice-personal/volary-lachesis/integration	21.640s
+ok  	github.com/Fantom-foundation/go-opera/app	0.033s
+?   	github.com/Fantom-foundation/go-opera/cmd/cmdtest	[no test files]
+ok  	github.com/Fantom-foundation/go-opera/cmd/opera	13.890s
+?   	github.com/Fantom-foundation/go-opera/cmd/opera/metrics	[no test files]
+?   	github.com/Fantom-foundation/go-opera/cmd/opera/tracing	[no test files]
+?   	github.com/Fantom-foundation/go-opera/crypto	[no test files]
+?   	github.com/Fantom-foundation/go-opera/debug	[no test files]
+?   	github.com/Fantom-foundation/go-opera/ethapi	[no test files]
+?   	github.com/Fantom-foundation/go-opera/eventcheck	[no test files]
+?   	github.com/Fantom-foundation/go-opera/eventcheck/basiccheck	[no test files]
+?   	github.com/Fantom-foundation/go-opera/eventcheck/gaspowercheck	[no test files]
+?   	github.com/Fantom-foundation/go-opera/eventcheck/heavycheck	[no test files]
+?   	github.com/Fantom-foundation/go-opera/eventcheck/parentscheck	[no test files]
+ok  	github.com/Fantom-foundation/go-opera/evmcore	6.322s
+?   	github.com/Fantom-foundation/go-opera/gossip	[no test files]
+?   	github.com/Fantom-foundation/go-opera/gossip/emitter	[no test files]
+ok  	github.com/Fantom-foundation/go-opera/gossip/filters	1.250s
+?   	github.com/Fantom-foundation/go-opera/gossip/gasprice	[no test files]
+?   	github.com/Fantom-foundation/go-opera/gossip/occuredtxs	[no test files]
+?   	github.com/Fantom-foundation/go-opera/gossip/piecefunc	[no test files]
+ok  	github.com/Fantom-foundation/go-opera/integration	21.640s
 ```
 
 Also it is tested with [fuzzing](./FUZZING.md).

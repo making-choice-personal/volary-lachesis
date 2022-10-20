@@ -20,8 +20,8 @@ import (
 	"github.com/status-im/keycard-go/hexutils"
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/making-choice-personal/volary-lachesis/gossip"
-	"github.com/making-choice-personal/volary-lachesis/integration"
+	"github.com/Fantom-foundation/go-opera/gossip"
+	"github.com/Fantom-foundation/go-opera/integration"
 )
 
 var (

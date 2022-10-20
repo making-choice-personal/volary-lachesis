@@ -21,16 +21,16 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/pkg/errors"
 
-	"github.com/making-choice-personal/volary-lachesis/ethapi"
-	"github.com/making-choice-personal/volary-lachesis/evmcore"
-	"github.com/making-choice-personal/volary-lachesis/gossip/evmstore"
-	"github.com/making-choice-personal/volary-lachesis/gossip/sfcapi"
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/drivertype"
-	"github.com/making-choice-personal/volary-lachesis/inter/iblockproc"
-	"github.com/making-choice-personal/volary-lachesis/opera"
-	"github.com/making-choice-personal/volary-lachesis/topicsdb"
-	"github.com/making-choice-personal/volary-lachesis/tracing"
+	"github.com/Fantom-foundation/go-opera/ethapi"
+	"github.com/Fantom-foundation/go-opera/evmcore"
+	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
+	"github.com/Fantom-foundation/go-opera/gossip/sfcapi"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/drivertype"
+	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
+	"github.com/Fantom-foundation/go-opera/opera"
+	"github.com/Fantom-foundation/go-opera/topicsdb"
+	"github.com/Fantom-foundation/go-opera/tracing"
 )
 
 // EthAPIBackend implements ethapi.Backend.

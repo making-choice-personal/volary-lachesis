@@ -9,7 +9,7 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/gossip/basestream"
 	"github.com/Fantom-foundation/lachesis-base/gossip/basestream/basestreamseeder"
 
-	"github.com/making-choice-personal/volary-lachesis/gossip/protocols/epochpacks/epstream"
+	"github.com/Fantom-foundation/go-opera/gossip/protocols/epochpacks/epstream"
 )
 
 var (

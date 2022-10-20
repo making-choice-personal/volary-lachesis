@@ -1,8 +1,8 @@
 package iep
 
 import (
-	"github.com/making-choice-personal/volary-lachesis/inter"
-	"github.com/making-choice-personal/volary-lachesis/inter/ier"
+	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/inter/ier"
 )
 
 type LlrEpochPack struct {

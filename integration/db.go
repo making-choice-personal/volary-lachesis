@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/making-choice-personal/volary-lachesis/gossip"
+	"github.com/Fantom-foundation/go-opera/gossip"
 	"github.com/Fantom-foundation/lachesis-base/hash"
 	"github.com/Fantom-foundation/lachesis-base/inter/dag"
 	"github.com/Fantom-foundation/lachesis-base/kvdb"

@@ -6,7 +6,7 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 
-	"github.com/making-choice-personal/volary-lachesis/utils/piecefunc"
+	"github.com/Fantom-foundation/go-opera/utils/piecefunc"
 )
 
 const (

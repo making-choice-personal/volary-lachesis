@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/making-choice-personal/volary-lachesis/gossip"
+	"github.com/Fantom-foundation/go-opera/gossip"
 )
 
 var (

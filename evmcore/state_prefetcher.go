@@ -24,7 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/making-choice-personal/volary-lachesis/utils/gsignercache"
+	"github.com/Fantom-foundation/go-opera/utils/gsignercache"
 )
 
 // statePrefetcher is a basic Prefetcher, which blindly executes a block on top
