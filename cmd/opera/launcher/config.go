@@ -96,7 +96,7 @@ var (
 	}
 
 	AllowedOperaGenesisHashes = map[uint64]hash.Hash{
-		opera.MainNetworkID: hash.HexToHash("0x21c1ef57c91497a69ec29aa8593f64497797c61b214fa22db6e083c61269634c"),
+		opera.MainNetworkID: hash.HexToHash("0xbf8aa49ec51055586719a40d318fe95922c9fad5a146083983702030781da489"),
 		opera.TestNetworkID: hash.HexToHash("0xc4a5fc96e575a16a9a0c7349d44dc4d0f602a54e0a8543360c2fee4c3937b49e"),
 	}
 )
