@@ -15,12 +15,15 @@ import (
 // OnNewEpoch should be called after each epoch change, and on startup
 func (em *Emitter) OnNewEpoch(newValidators *pos.Validators, newEpoch idx.Epoch) {
 	em.maxParents = em.config.MaxParents
-	rules := em.world.Store.GetRules()
+	rules := em.world.GetRules()
 	if em.maxParents == 0 {
 		em.maxParents = rules.Dag.MaxParents
 	}
 	if em.maxParents > rules.Dag.MaxParents {
 		em.maxParents = rules.Dag.MaxParents
+	}
+	if em.validators != nil && em.isValidator() && !em.validators.Exists(em.config.Validator.ID) && newValidators.Exists(em.config.Validator.ID) {
+		em.syncStatus.becameValidator = time.Now()
 	}
 
 	em.validators, em.epoch = newValidators, newEpoch
@@ -28,7 +31,6 @@ func (em *Emitter) OnNewEpoch(newValidators *pos.Validators, newEpoch idx.Epoch)
 	if !em.isValidator() {
 		return
 	}
-	// update myValidatorID
 	em.prevEmittedAtTime = em.loadPrevEmitTime()
 
 	em.originatedTxs.Clear()
@@ -41,7 +43,7 @@ func (em *Emitter) OnNewEpoch(newValidators *pos.Validators, newEpoch idx.Epoch)
 
 	em.recountValidators(newValidators)
 
-	em.quorumIndexer = ancestor.NewQuorumIndexer(newValidators, vecmt2dagidx.Wrap(em.world.DagIndex),
+	em.quorumIndexer = ancestor.NewQuorumIndexer(newValidators, vecmt2dagidx.Wrap(em.world.DagIndex()),
 		func(median, current, update idx.Event, validatorIdx idx.Validator) ancestor.Metric {
 			return updMetric(median, current, update, validatorIdx, newValidators)
 		})
@@ -79,8 +81,8 @@ func (em *Emitter) OnEventConfirmed(he inter.EventI) {
 	} else {
 		em.pendingGas = 0
 	}
-	if !he.NoTxs() {
-		e := em.world.Store.GetEventPayload(he.ID())
+	if he.AnyTxs() {
+		e := em.world.GetEventPayload(he.ID())
 		for _, tx := range e.Txs() {
 			addr, _ := types.Sender(em.world.TxSigner, tx)
 			em.originatedTxs.Dec(addr)

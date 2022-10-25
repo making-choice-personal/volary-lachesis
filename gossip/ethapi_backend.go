@@ -12,8 +12,6 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -25,11 +23,11 @@ import (
 
 	"github.com/Fantom-foundation/go-opera/ethapi"
 	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/gossip/blockproc"
-	"github.com/Fantom-foundation/go-opera/gossip/gasprice"
+	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
 	"github.com/Fantom-foundation/go-opera/gossip/sfcapi"
 	"github.com/Fantom-foundation/go-opera/inter"
 	"github.com/Fantom-foundation/go-opera/inter/drivertype"
+	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
 	"github.com/Fantom-foundation/go-opera/opera"
 	"github.com/Fantom-foundation/go-opera/topicsdb"
 	"github.com/Fantom-foundation/go-opera/tracing"
@@ -37,10 +35,11 @@ import (
 
 // EthAPIBackend implements ethapi.Backend.
 type EthAPIBackend struct {
-	extRPCEnabled bool
-	svc           *Service
-	state         *EvmStateReader
-	gpo           *gasprice.Oracle
+	extRPCEnabled       bool
+	svc                 *Service
+	state               *EvmStateReader
+	signer              types.Signer
+	allowUnprotectedTxs bool
 }
 
 // ChainConfig returns the active chain configuration.
@@ -52,6 +51,26 @@ func (b *EthAPIBackend) CurrentBlock() *evmcore.EvmBlock {
 	return b.state.CurrentBlock()
 }
 
+func (b *EthAPIBackend) ResolveRpcBlockNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (idx.Block, error) {
+	latest := b.svc.store.GetLatestBlockIndex()
+	if number, ok := blockNrOrHash.Number(); ok && (number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber) {
+		return latest, nil
+	} else if number, ok := blockNrOrHash.Number(); ok {
+		if idx.Block(number) > latest {
+			return 0, errors.New("block not found")
+		}
+		return idx.Block(number), nil
+	} else if h, ok := blockNrOrHash.Hash(); ok {
+		index := b.svc.store.GetBlockIndex(hash.Event(h))
+		if index == nil {
+			return 0, errors.New("block not found")
+		}
+		return *index, nil
+	}
+	return 0, errors.New("unknown header selector")
+}
+
+// HeaderByNumber returns evm block header by its number, or nil if not exists.
 func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*evmcore.EvmHeader, error) {
 	blk, err := b.BlockByNumber(ctx, number)
 	if err != nil {
@@ -63,7 +82,7 @@ func (b *EthAPIBackend) HeaderByNumber(ctx context.Context, number rpc.BlockNumb
 	return blk.Header(), err
 }
 
-// HeaderByHash returns evm header by its (atropos) hash.
+// HeaderByHash returns evm block header by its (atropos) hash, or nil if not exists.
 func (b *EthAPIBackend) HeaderByHash(ctx context.Context, h common.Hash) (*evmcore.EvmHeader, error) {
 	index := b.svc.store.GetBlockIndex(hash.Event(h))
 	if index == nil {
@@ -72,7 +91,7 @@ func (b *EthAPIBackend) HeaderByHash(ctx context.Context, h common.Hash) (*evmco
 	return b.HeaderByNumber(ctx, rpc.BlockNumber(*index))
 }
 
-// BlockByNumber returns block by its number.
+// BlockByNumber returns evm block by its number, or nil if not exists.
 func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*evmcore.EvmBlock, error) {
 	if number == rpc.PendingBlockNumber {
 		number = rpc.LatestBlockNumber
@@ -89,6 +108,7 @@ func (b *EthAPIBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumbe
 	return blk, nil
 }
 
+// StateAndHeaderByNumberOrHash returns evm state and block header by block number or block hash, err if not exists.
 func (b *EthAPIBackend) StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *evmcore.EvmHeader, error) {
 	var header *evmcore.EvmHeader
 	if number, ok := blockNrOrHash.Number(); ok && (number == rpc.LatestBlockNumber || number == rpc.PendingBlockNumber) {
@@ -188,7 +208,7 @@ func (b *EthAPIBackend) GetHeads(ctx context.Context, epoch rpc.BlockNumber) (he
 	}
 
 	if requested == current {
-		heads = b.svc.store.GetHeads(requested)
+		heads = b.svc.store.GetHeadsSlice(requested)
 	} else {
 		err = errors.New("heads for previous epochs are not available")
 		return
@@ -265,7 +285,8 @@ func (b *EthAPIBackend) GetReceiptsByNumber(ctx context.Context, number rpc.Bloc
 		number = rpc.BlockNumber(header.Number.Uint64())
 	}
 
-	receipts := b.svc.store.evm.GetReceipts(idx.Block(number))
+	block := b.state.GetBlock(common.Hash{}, uint64(number))
+	receipts := b.svc.store.evm.GetReceipts(idx.Block(number), b.signer, block.Hash, block.Transactions)
 	return receipts, nil
 }
 
@@ -284,7 +305,7 @@ func (b *EthAPIBackend) GetLogs(ctx context.Context, block common.Hash) ([][]*ty
 	if receipts == nil || err != nil {
 		return nil, err
 	}
-	logs := make([][]*types.Log, len(receipts))
+	logs := make([][]*types.Log, receipts.Len())
 	for i, receipt := range receipts {
 		logs[i] = receipt.Logs
 	}
@@ -295,13 +316,16 @@ func (b *EthAPIBackend) GetTd(_ common.Hash) *big.Int {
 	return big.NewInt(0)
 }
 
-func (b *EthAPIBackend) GetEVM(ctx context.Context, msg evmcore.Message, state *state.StateDB, header *evmcore.EvmHeader) (*vm.EVM, func() error, error) {
-	state.SetBalance(msg.From(), math.MaxBig256)
+func (b *EthAPIBackend) GetEVM(ctx context.Context, msg evmcore.Message, state *state.StateDB, header *evmcore.EvmHeader, vmConfig *vm.Config) (*vm.EVM, func() error, error) {
 	vmError := func() error { return nil }
 
-	context := evmcore.NewEVMContext(msg, header, b.state, nil)
+	if vmConfig == nil {
+		vmConfig = &opera.DefaultVMConfig
+	}
+	txContext := evmcore.NewEVMTxContext(msg)
+	context := evmcore.NewEVMBlockContext(header, b.state, nil)
 	config := b.ChainConfig()
-	return vm.NewEVM(context, state, config, opera.DefaultVMConfig), vmError, nil
+	return vm.NewEVM(context, txContext, state, config, *vmConfig), vmError, nil
 }
 
 func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
@@ -313,20 +337,20 @@ func (b *EthAPIBackend) SendTx(ctx context.Context, signedTx *types.Transaction)
 	return err
 }
 
-func (b *EthAPIBackend) SubscribeLogsEvent(ch chan<- []*types.Log) notify.Subscription {
+func (b *EthAPIBackend) SubscribeLogsNotify(ch chan<- []*types.Log) notify.Subscription {
 	return b.svc.feed.SubscribeNewLogs(ch)
 }
 
-func (b *EthAPIBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) notify.Subscription {
-	return b.svc.feed.SubscribeNewTxs(ch)
-}
-
-func (b *EthAPIBackend) SubscribeNewBlockEvent(ch chan<- evmcore.ChainHeadNotify) notify.Subscription {
+func (b *EthAPIBackend) SubscribeNewBlockNotify(ch chan<- evmcore.ChainHeadNotify) notify.Subscription {
 	return b.svc.feed.SubscribeNewBlock(ch)
 }
 
+func (b *EthAPIBackend) SubscribeNewTxsNotify(ch chan<- evmcore.NewTxsNotify) notify.Subscription {
+	return b.svc.txpool.SubscribeNewTxsNotify(ch)
+}
+
 func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
-	pending, err := b.svc.txpool.Pending()
+	pending, err := b.svc.txpool.Pending(false)
 	if err != nil {
 		return nil, err
 	}
@@ -339,6 +363,10 @@ func (b *EthAPIBackend) GetPoolTransactions() (types.Transactions, error) {
 
 func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction {
 	return b.svc.txpool.Get(hash)
+}
+
+func (b *EthAPIBackend) GetTxPosition(txHash common.Hash) *evmstore.TxPosition {
+	return b.svc.store.evm.GetTxPosition(txHash)
 }
 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, uint64, uint64, error) {
@@ -382,14 +410,10 @@ func (b *EthAPIBackend) TxPoolContent() (map[common.Address]types.Transactions, 
 	return b.svc.txpool.Content()
 }
 
-func (b *EthAPIBackend) SubscribeNewTxsNotify(ch chan<- evmcore.NewTxsNotify) notify.Subscription {
-	return b.svc.txpool.SubscribeNewTxsNotify(ch)
-}
-
 // Progress returns current synchronization status of this node
 func (b *EthAPIBackend) Progress() ethapi.PeerProgress {
-	p2pProgress := b.svc.pm.myProgress()
-	highestP2pProgress := b.svc.pm.highestPeerProgress()
+	p2pProgress := b.svc.handler.myProgress()
+	highestP2pProgress := b.svc.handler.highestPeerProgress()
 	b.svc.engineMu.RLock()
 	lastBlock := b.svc.store.GetBlock(p2pProgress.LastBlockIdx)
 	b.svc.engineMu.RUnlock()
@@ -404,16 +428,16 @@ func (b *EthAPIBackend) Progress() ethapi.PeerProgress {
 	}
 }
 
-func (b *EthAPIBackend) ProtocolVersion() int {
-	return int(ProtocolVersions[len(ProtocolVersions)-1])
+func (b *EthAPIBackend) TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions) {
+	return b.svc.txpool.ContentFrom(addr)
 }
 
-func (b *EthAPIBackend) SuggestPrice(ctx context.Context) (*big.Int, error) {
-	return b.gpo.SuggestPrice(ctx)
+func (b *EthAPIBackend) SuggestGasTipCap(ctx context.Context) (*big.Int, error) {
+	return b.svc.gpo.SuggestTipCap(), nil
 }
 
 func (b *EthAPIBackend) ChainDb() ethdb.Database {
-	return b.svc.store.evm.EvmTable()
+	return b.svc.store.evm.EvmDb
 }
 
 func (b *EthAPIBackend) AccountManager() *accounts.Manager {
@@ -422,6 +446,10 @@ func (b *EthAPIBackend) AccountManager() *accounts.Manager {
 
 func (b *EthAPIBackend) ExtRPCEnabled() bool {
 	return b.extRPCEnabled
+}
+
+func (b *EthAPIBackend) UnprotectedAllowed() bool {
+	return b.allowUnprotectedTxs
 }
 
 func (b *EthAPIBackend) RPCGasCap() uint64 {
@@ -433,7 +461,7 @@ func (b *EthAPIBackend) RPCTxFeeCap() float64 {
 }
 
 func (b *EthAPIBackend) EvmLogIndex() *topicsdb.Index {
-	return b.svc.store.evm.EvmLogs()
+	return b.svc.store.evm.EvmLogs
 }
 
 // CurrentEpoch returns current epoch number.
@@ -521,7 +549,7 @@ func (b *EthAPIBackend) GetStakerDelegationsClaimedRewards(ctx context.Context, 
 	return b.svc.store.sfcapi.GetStakerDelegationsClaimedRewards(stakerID), nil
 }
 
-func (b *EthAPIBackend) extendStaker(stakerID idx.ValidatorID, staker *sfcapi.SfcStaker, bs blockproc.BlockState, es blockproc.EpochState) *sfcapi.SfcStaker {
+func (b *EthAPIBackend) extendStaker(stakerID idx.ValidatorID, staker *sfcapi.SfcStaker, bs iblockproc.BlockState, es iblockproc.EpochState) *sfcapi.SfcStaker {
 	selfDelegation := b.svc.store.sfcapi.GetSfcDelegation(sfcapi.DelegationID{staker.Address, stakerID})
 	if selfDelegation != nil {
 		staker.StakeAmount = selfDelegation.Amount
@@ -536,14 +564,14 @@ func (b *EthAPIBackend) extendStaker(stakerID idx.ValidatorID, staker *sfcapi.Sf
 		staker.DelegatedMe = new(big.Int)
 	}
 	staker.IsValidator = es.Validators.Exists(stakerID)
+	if staker.Status == 1 {
+		staker.Status = 0
+	}
 	if staker.Status == drivertype.DoublesignBit {
 		staker.Status = sfcapi.ForkBit
 	}
 	if staker.Status == 1<<3 {
 		staker.Status = sfcapi.OfflineBit
-	}
-	if staker.Status == 1 {
-		staker.Status = 0
 	}
 	return staker
 }
@@ -600,8 +628,8 @@ func (b *EthAPIBackend) GetDelegation(ctx context.Context, id sfcapi.DelegationI
 	return b.svc.store.sfcapi.GetSfcDelegation(id), nil
 }
 
-func (b *EthAPIBackend) CalcLogsBloom() bool {
-	return b.svc.config.RPCLogsBloom
+func (b *EthAPIBackend) CalcBlockExtApi() bool {
+	return b.svc.config.RPCBlockExt
 }
 
 func (b *EthAPIBackend) SealedEpochTiming(ctx context.Context) (start inter.Timestamp, end inter.Timestamp) {

@@ -8,28 +8,51 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
+	"github.com/ethereum/go-ethereum/params"
 
 	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/inter"
+	"github.com/Fantom-foundation/go-opera/gossip/gasprice"
+	"github.com/Fantom-foundation/go-opera/opera"
+)
+
+var (
+	big3 = big.NewInt(3)
+	big5 = big.NewInt(5)
 )
 
 type EvmStateReader struct {
 	*ServiceFeed
 
 	store *Store
+	gpo   *gasprice.Oracle
 }
 
 func (s *Service) GetEvmStateReader() *EvmStateReader {
 	return &EvmStateReader{
 		ServiceFeed: &s.feed,
 		store:       s.store,
+		gpo:         s.gpo,
 	}
 }
 
+// MinGasPrice returns current hard lower bound for gas price
 func (r *EvmStateReader) MinGasPrice() *big.Int {
 	return r.store.GetRules().Economy.MinGasPrice
+}
+
+// RecommendedGasTip returns current soft lower bound for gas tip
+func (r *EvmStateReader) RecommendedGasTip() *big.Int {
+	// max((SuggestedGasTip+minGasPrice)*0.6-minGasPrice, 0)
+	min := r.MinGasPrice()
+	est := new(big.Int).Set(r.gpo.SuggestTipCap())
+	est.Add(est, min)
+	est.Mul(est, big3)
+	est.Div(est, big5)
+	est.Sub(est, min)
+	if est.Sign() < 0 {
+		return new(big.Int)
+	}
+	return est
 }
 
 func (r *EvmStateReader) MaxGasLimit() uint64 {
@@ -41,6 +64,10 @@ func (r *EvmStateReader) MaxGasLimit() uint64 {
 		return 0
 	}
 	return rules.Economy.Gas.MaxEventGas - maxEmptyEventGas
+}
+
+func (r *EvmStateReader) Config() *params.ChainConfig {
+	return r.store.GetRules().EvmChainConfig()
 }
 
 func (r *EvmStateReader) CurrentBlock() *evmcore.EvmBlock {
@@ -71,59 +98,43 @@ func (r *EvmStateReader) getBlock(h hash.Event, n idx.Block, readTxs bool) *evmc
 	if (h != hash.Event{}) && (h != block.Atropos) {
 		return nil
 	}
+	if readTxs {
+		if cached := r.store.EvmStore().GetCachedEvmBlock(n); cached != nil {
+			return cached
+		}
+	}
 
 	var transactions types.Transactions
 	if readTxs {
-		transactions = make(types.Transactions, 0, len(block.Txs)+len(block.InternalTxs)+len(block.Events)*10)
-		for _, txid := range block.InternalTxs {
-			tx := r.store.evm.GetTx(txid)
-			if tx == nil {
-				log.Crit("Internal tx not found", "tx", txid.String())
-				continue
-			}
-			transactions = append(transactions, tx)
-		}
-		for _, txid := range block.Txs {
-			tx := r.store.evm.GetTx(txid)
-			if tx == nil {
-				log.Crit("Tx not found", "tx", txid.String())
-				continue
-			}
-			transactions = append(transactions, tx)
-		}
-		for _, id := range block.Events {
-			e := r.store.GetEventPayload(id)
-			if e == nil {
-				log.Crit("Block event not found", "event", id.String())
-				continue
-			}
-			transactions = append(transactions, e.Txs()...)
-
-		}
-
-		transactions = inter.FilterSkippedTxs(transactions, block.SkippedTxs)
+		transactions = r.store.GetBlockTxs(n, block)
 	} else {
 		transactions = make(types.Transactions, 0)
 	}
 
+	// find block rules
+	epoch := r.store.FindBlockEpoch(n)
+	es := r.store.GetHistoryEpochState(epoch)
+	var rules opera.Rules
+	if es != nil {
+		rules = es.Rules
+	}
 	var prev hash.Event
 	if n != 0 {
 		prev = r.store.GetBlock(n - 1).Atropos
 	}
-	evmHeader := evmcore.ToEvmHeader(block, n, prev)
+	evmHeader := evmcore.ToEvmHeader(block, n, prev, rules)
 
+	var evmBlock *evmcore.EvmBlock
 	if readTxs {
-		if len(transactions) == 0 {
-			evmHeader.TxHash = types.EmptyRootHash
-		} else {
-			evmHeader.TxHash = types.DeriveSha(transactions, new(trie.Trie))
+		evmBlock = evmcore.NewEvmBlock(evmHeader, transactions)
+		r.store.EvmStore().SetCachedEvmBlock(n, evmBlock)
+	} else {
+		// not completed block here
+		evmBlock = &evmcore.EvmBlock{
+			EvmHeader: *evmHeader,
 		}
 	}
 
-	evmBlock := &evmcore.EvmBlock{
-		EvmHeader:    *evmHeader,
-		Transactions: transactions,
-	}
 	return evmBlock
 }
 

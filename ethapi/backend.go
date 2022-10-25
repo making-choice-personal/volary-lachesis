@@ -53,26 +53,26 @@ type PeerProgress struct {
 // both full and light clients) with access to necessary functions.
 type Backend interface {
 	// General Ethereum API
-	ProtocolVersion() int
 	Progress() PeerProgress
-	SuggestPrice(ctx context.Context) (*big.Int, error)
+	SuggestGasTipCap(ctx context.Context) (*big.Int, error)
 	ChainDb() ethdb.Database
 	AccountManager() *accounts.Manager
 	ExtRPCEnabled() bool
-	RPCGasCap() uint64    // global gas cap for eth_call over rpc: DoS protection
-	RPCTxFeeCap() float64 // global tx fee cap for all transaction related APIs
-	CalcLogsBloom() bool
+	RPCGasCap() uint64        // global gas cap for eth_call over rpc: DoS protection
+	RPCTxFeeCap() float64     // global tx fee cap for all transaction related APIs
+	UnprotectedAllowed() bool // allows only for EIP155 transactions.
+	CalcBlockExtApi() bool
 
 	// Blockchain API
 	HeaderByNumber(ctx context.Context, number rpc.BlockNumber) (*evmcore.EvmHeader, error)
 	HeaderByHash(ctx context.Context, hash common.Hash) (*evmcore.EvmHeader, error)
 	BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*evmcore.EvmBlock, error)
 	StateAndHeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (*state.StateDB, *evmcore.EvmHeader, error)
-	//GetHeader(ctx context.Context, hash common.Hash) *evmcore.EvmHeader
+	ResolveRpcBlockNumberOrHash(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (idx.Block, error)
 	BlockByHash(ctx context.Context, hash common.Hash) (*evmcore.EvmBlock, error)
 	GetReceiptsByNumber(ctx context.Context, number rpc.BlockNumber) (types.Receipts, error)
 	GetTd(hash common.Hash) *big.Int
-	GetEVM(ctx context.Context, msg evmcore.Message, state *state.StateDB, header *evmcore.EvmHeader) (*vm.EVM, func() error, error)
+	GetEVM(ctx context.Context, msg evmcore.Message, state *state.StateDB, header *evmcore.EvmHeader, vmConfig *vm.Config) (*vm.EVM, func() error, error)
 	MinGasPrice() *big.Int
 	MaxGasLimit() uint64
 
@@ -84,6 +84,7 @@ type Backend interface {
 	GetPoolNonce(ctx context.Context, addr common.Address) (uint64, error)
 	Stats() (pending int, queued int)
 	TxPoolContent() (map[common.Address]types.Transactions, map[common.Address]types.Transactions)
+	TxPoolContentFrom(addr common.Address) (types.Transactions, types.Transactions)
 	SubscribeNewTxsNotify(chan<- evmcore.NewTxsNotify) notify.Subscription
 
 	ChainConfig() *params.ChainConfig
@@ -170,29 +171,29 @@ func GetAPIs(apiBackend Backend) []rpc.API {
 			Namespace: "abft",
 			Version:   "1.0",
 			Service:   NewPublicAbftAPI(apiBackend),
-			Public:    false,
+			Public:    true,
 		},
 	}
 
-	// NOTE: eth-namespace is doubled as ftm-namespace for branding purpose
+	// NOTE: eth-namespace is doubled as vlry-namespace for branding purpose
 	double := []rpc.API{
 		{
-			Namespace: "ftm",
+			Namespace: "vlry",
 			Version:   "1.0",
 			Service:   NewPublicEthereumAPI(apiBackend),
 			Public:    true,
 		}, {
-			Namespace: "ftm",
+			Namespace: "vlry",
 			Version:   "1.0",
 			Service:   NewPublicBlockChainAPI(apiBackend),
 			Public:    true,
 		}, {
-			Namespace: "ftm",
+			Namespace: "vlry",
 			Version:   "1.0",
 			Service:   NewPublicTransactionPoolAPI(apiBackend, nonceLock),
 			Public:    true,
 		}, {
-			Namespace: "ftm",
+			Namespace: "vlry",
 			Version:   "1.0",
 			Service:   NewPublicAccountAPI(apiBackend.AccountManager()),
 			Public:    true,

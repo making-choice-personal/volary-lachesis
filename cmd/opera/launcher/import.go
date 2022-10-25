@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -26,7 +27,6 @@ import (
 	"github.com/Fantom-foundation/go-opera/gossip/emitter"
 	"github.com/Fantom-foundation/go-opera/integration"
 	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/utils/iodb"
 	"github.com/Fantom-foundation/go-opera/utils/ioread"
 )
 
@@ -37,7 +37,11 @@ func importEvm(ctx *cli.Context) error {
 
 	cfg := makeAllConfigs(ctx)
 
-	gdb := makeRawGossipStore(cfg.Node.DataDir, cfg)
+	rawProducer := integration.DBProducer(path.Join(cfg.Node.DataDir, "chaindata"), cfg.cachescale)
+	gdb, err := makeRawGossipStore(rawProducer, cfg)
+	if err != nil {
+		log.Crit("DB opening error", "datadir", cfg.Node.DataDir, "err", err)
+	}
 	defer gdb.Close()
 
 	for _, fn := range ctx.Args() {
@@ -68,7 +72,7 @@ func importEvmFile(fn string, gdb *gossip.Store) error {
 		defer reader.(*gzip.Reader).Close()
 	}
 
-	return iodb.Read(reader, gdb.EvmStore().EvmKvdbTable().NewBatch())
+	return gdb.EvmStore().ImportEvm(reader)
 }
 
 func importEvents(ctx *cli.Context) error {
@@ -81,8 +85,8 @@ func importEvents(ctx *cli.Context) error {
 	cfg := makeAllConfigs(ctx)
 	cfg.Opera.Protocol.EventsSemaphoreLimit.Size = math.MaxUint32
 	cfg.Opera.Protocol.EventsSemaphoreLimit.Num = math.MaxUint32
-	cfg.Opera.Emitter.Validator = emitter.ValidatorConfig{}
-	cfg.Opera.TxPool.Journal = ""
+	cfg.Emitter.Validator = emitter.ValidatorConfig{}
+	cfg.TxPool.Journal = ""
 	cfg.Node.IPCPath = ""
 	cfg.Node.HTTPHost = ""
 	cfg.Node.WSHost = ""

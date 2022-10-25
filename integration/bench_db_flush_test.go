@@ -11,6 +11,7 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/kvdb"
 	"github.com/Fantom-foundation/lachesis-base/kvdb/leveldb"
+	"github.com/Fantom-foundation/lachesis-base/utils/cachescale"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
@@ -25,7 +26,7 @@ import (
 func BenchmarkFlushDBs(b *testing.B) {
 	rawProducer, dir := dbProducer("flush_bench")
 	defer os.RemoveAll(dir)
-	genStore := makegenesis.FakeGenesisStore(1, utils.ToFtm(1), utils.ToFtm(1))
+	genStore := makegenesis.FakeGenesisStore(2, 1, utils.ToVlry(1), utils.ToVlry(1))
 	_, _, store, s2, s3, _ := MakeEngine(rawProducer, InputGenesis{
 		Hash: genStore.Hash(),
 		Read: func(store *genesisstore.Store) error {
@@ -40,11 +41,11 @@ func BenchmarkFlushDBs(b *testing.B) {
 			return nil
 		},
 	}, Configs{
-		Opera:         gossip.DefaultConfig(),
-		OperaStore:    gossip.DefaultStoreConfig(),
+		Opera:         gossip.DefaultConfig(cachescale.Identity),
+		OperaStore:    gossip.DefaultStoreConfig(cachescale.Identity),
 		Lachesis:      abft.DefaultConfig(),
-		LachesisStore: abft.DefaultStoreConfig(),
-		VectorClock:   vecmt.DefaultConfig(),
+		LachesisStore: abft.DefaultStoreConfig(cachescale.Identity),
+		VectorClock:   vecmt.DefaultConfig(cachescale.Identity),
 	})
 	defer store.Close()
 	defer s2.Close()
@@ -59,7 +60,7 @@ func BenchmarkFlushDBs(b *testing.B) {
 			}
 			return []uint32{uint32(n), uint32(n) + 1, uint32(n) + 2}
 		}
-		for !store.IsCommitNeeded(false) {
+		for !store.IsCommitNeeded() {
 			store.SetBlock(n, &inter.Block{
 				Time:        inter.Timestamp(n << 32),
 				Atropos:     hash.Event{},
