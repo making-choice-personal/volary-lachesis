@@ -8,13 +8,13 @@ type Instance struct {
 	Log log.Logger
 }
 
-func New(name ...string) Instance {
-	if len(name) == 0 {
-		return Instance{
-			Log: log.New(),
-		}
-	}
+func MakeInstance() Instance {
 	return Instance{
-		Log: log.New("module", name[0]),
+		Log: log.New(),
 	}
+
+}
+
+func (i *Instance) SetName(name string) {
+	i.Log = log.New("name", name)
 }

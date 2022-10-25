@@ -11,18 +11,18 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 
 	"github.com/Fantom-foundation/go-opera/evmcore"
+	"github.com/Fantom-foundation/go-opera/gossip/blockproc"
 	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
 	"github.com/Fantom-foundation/go-opera/gossip/sfcapi"
 	"github.com/Fantom-foundation/go-opera/inter"
 	"github.com/Fantom-foundation/go-opera/inter/drivertype"
-	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
 	"github.com/Fantom-foundation/go-opera/opera"
 	"github.com/Fantom-foundation/go-opera/opera/genesis"
 )
 
 // ApplyGenesis writes initial state.
 func (s *Store) ApplyGenesis(blockProc BlockProc, g opera.Genesis) (genesisHash hash.Hash, err error) {
-	// if we're here, then it's first time genesis is applied
+	// if we'here, then it's first time genesis is applied
 	err = s.applyEpoch1Genesis(blockProc, g)
 	if err != nil {
 		return genesisHash, err
@@ -33,17 +33,9 @@ func (s *Store) ApplyGenesis(blockProc BlockProc, g opera.Genesis) (genesisHash 
 	return genesisHash, err
 }
 
-func indexRawReceipts(s *Store, receiptsForStorage []*types.ReceiptForStorage, txs types.Transactions, blockIdx idx.Block, atropos hash.Event) {
-	s.evm.SetRawReceipts(blockIdx, receiptsForStorage)
-	receipts, _ := evmstore.UnwrapStorageReceipts(receiptsForStorage, blockIdx, nil, common.Hash(atropos), txs)
-	for _, r := range receipts {
-		s.evm.IndexLogs(r.Logs...)
-	}
-}
-
 func (s *Store) applyEpoch0Genesis(g opera.Genesis) (evmBlock *evmcore.EvmBlock, err error) {
 	// write genesis blocks
-	var highestBlock iblockproc.BlockCtx
+	var highestBlock blockproc.BlockCtx
 	var startingRoot hash.Hash
 	g.Blocks.ForEach(func(blockIdx idx.Block, block genesis.Block) {
 		txHashes := make([]common.Hash, len(block.Txs))
@@ -65,12 +57,22 @@ func (s *Store) applyEpoch0Genesis(g opera.Genesis) (evmBlock *evmcore.EvmBlock,
 		if len(block.Receipts) != 0 {
 			gasUsed = block.Receipts[len(block.Receipts)-1].CumulativeGasUsed
 			s.evm.SetRawReceipts(blockIdx, block.Receipts)
-
 			allTxs := block.Txs
 			if block.InternalTxs.Len() > 0 {
 				allTxs = append(block.InternalTxs, block.Txs...)
 			}
-			indexRawReceipts(s, block.Receipts, allTxs, blockIdx, block.Atropos)
+			logIdx := uint(0)
+			for i, r := range block.Receipts {
+				for _, l := range r.Logs {
+					l.BlockNumber = uint64(blockIdx)
+					l.TxHash = allTxs[i].Hash()
+					l.Index = logIdx
+					l.TxIndex = uint(i)
+					l.BlockHash = common.Hash(block.Atropos)
+					logIdx++
+				}
+				s.evm.IndexLogs(r.Logs...)
+			}
 		}
 
 		s.SetBlock(blockIdx, &inter.Block{
@@ -96,23 +98,21 @@ func (s *Store) applyEpoch0Genesis(g opera.Genesis) (evmBlock *evmcore.EvmBlock,
 		return evmBlock, err
 	}
 
-	s.SetBlockEpochState(iblockproc.BlockState{
+	s.SetBlockEpochState(blockproc.BlockState{
 		LastBlock:             highestBlock,
 		FinalizedStateRoot:    hash.Hash(evmBlock.Root),
 		EpochGas:              0,
 		EpochCheaters:         lachesis.Cheaters{},
-		CheatersWritten:       0,
-		ValidatorStates:       make([]iblockproc.ValidatorBlockState, 0),
+		ValidatorStates:       make([]blockproc.ValidatorBlockState, 0),
 		NextValidatorProfiles: make(map[idx.ValidatorID]drivertype.Validator),
-		DirtyRules:            nil,
-		AdvanceEpochs:         0,
-	}, iblockproc.EpochState{
+		DirtyRules:            g.Rules,
+	}, blockproc.EpochState{
 		Epoch:             g.FirstEpoch - 1,
 		EpochStart:        g.PrevEpochTime,
 		PrevEpochStart:    g.PrevEpochTime - 1,
 		EpochStateRoot:    hash.Zero,
 		Validators:        pos.NewBuilder().Build(),
-		ValidatorStates:   make([]iblockproc.ValidatorEpochState, 0),
+		ValidatorStates:   make([]blockproc.ValidatorEpochState, 0),
 		ValidatorProfiles: make(map[idx.ValidatorID]drivertype.Validator),
 		Rules:             g.Rules,
 	})
@@ -134,7 +134,7 @@ func (s *Store) applyEpoch1Genesis(blockProc BlockProc, g opera.Genesis) (err er
 
 	bs, es := s.GetBlockState(), s.GetEpochState()
 
-	blockCtx := iblockproc.BlockCtx{
+	blockCtx := blockproc.BlockCtx{
 		Idx:     bs.LastBlock.Idx + 1,
 		Time:    g.Time,
 		Atropos: hash.Event{},
@@ -181,21 +181,10 @@ func (s *Store) applyEpoch1Genesis(blockProc BlockProc, g opera.Genesis) (err er
 	bs.FinalizedStateRoot = hash.Hash(evmBlock.Root)
 
 	bs.LastBlock = blockCtx
-	s.SetHistoryBlockEpochState(es.Epoch, bs, es)
-	s.SetEpochBlock(blockCtx.Idx+1, es.Epoch)
 	s.SetBlockEpochState(bs, es)
-	s.setLlrState(LlrState{
-		LowestEpochToDecide: es.Epoch + 1,
-		LowestEpochToFill:   es.Epoch + 1,
-		LowestBlockToDecide: bs.LastBlock.Idx + 1,
-		LowestBlockToFill:   bs.LastBlock.Idx + 1,
-	})
 
 	prettyHash := func(root common.Hash, g opera.Genesis) hash.Event {
 		e := inter.MutableEventPayload{}
-		if es.Rules.Upgrades.Llr {
-			e.SetVersion(1)
-		}
 		// for nice-looking ID
 		e.SetEpoch(g.FirstEpoch - 1)
 		e.SetLamport(1)
@@ -232,14 +221,13 @@ func (s *Store) applyEpoch1Genesis(blockProc BlockProc, g opera.Genesis) (err er
 		}
 	}
 
-	s.commitEVM(true)
-	s.SetEpochBlock(blockCtx.Idx, es.Epoch)
+	s.commitEVM()
 	s.SetBlock(blockCtx.Idx, block)
 	s.SetBlockIndex(genesisAtropos, blockCtx.Idx)
 	s.SetGenesisBlockIndex(blockCtx.Idx)
 
 	// index data for legacy SFC API
-	sfcapi.ApplyGenesis(s.sfcapi, s.evm.EvmLogs)
+	sfcapi.ApplyGenesis(s.sfcapi, s.evm.EvmLogs())
 
 	return nil
 }

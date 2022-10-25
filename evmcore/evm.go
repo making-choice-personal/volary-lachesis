@@ -30,39 +30,26 @@ type DummyChain interface {
 	GetHeader(common.Hash, uint64) *EvmHeader
 }
 
-// NewEVMBlockContext creates a new context for use in the EVM.
-func NewEVMBlockContext(header *EvmHeader, chain DummyChain, author *common.Address) vm.BlockContext {
-	var (
-		beneficiary common.Address
-		baseFee     *big.Int
-	)
+// NewEVMContext creates a new context for use in the EVM.
+func NewEVMContext(msg Message, header *EvmHeader, chain DummyChain, author *common.Address) vm.Context {
 	// If we don't have an explicit author (i.e. not mining), extract from the header
+	var beneficiary common.Address
 	if author == nil {
 		beneficiary = header.Coinbase
 	} else {
 		beneficiary = *author
 	}
-	if header.BaseFee != nil {
-		baseFee = new(big.Int).Set(header.BaseFee)
-	}
-	return vm.BlockContext{
+	return vm.Context{
 		CanTransfer: CanTransfer,
 		Transfer:    Transfer,
 		GetHash:     GetHashFn(header, chain),
+		Origin:      msg.From(),
 		Coinbase:    beneficiary,
 		BlockNumber: new(big.Int).Set(header.Number),
 		Time:        new(big.Int).SetUint64(uint64(header.Time.Unix())),
 		Difficulty:  big.NewInt(1),
-		BaseFee:     baseFee,
 		GasLimit:    header.GasLimit,
-	}
-}
-
-// NewEVMTxContext creates a new transaction context for a single transaction.
-func NewEVMTxContext(msg Message) vm.TxContext {
-	return vm.TxContext{
-		Origin:   msg.From(),
-		GasPrice: new(big.Int).Set(msg.GasPrice()),
+		GasPrice:    new(big.Int).Set(msg.GasPrice()),
 	}
 }
 

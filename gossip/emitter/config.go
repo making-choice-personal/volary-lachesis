@@ -25,11 +25,6 @@ type ValidatorConfig struct {
 	PubKey validatorpk.PubKey
 }
 
-type FileConfig struct {
-	Path     string
-	SyncMode bool
-}
-
 // Config is the configuration of events emitter.
 type Config struct {
 	VersionToPublish string
@@ -46,12 +41,6 @@ type Config struct {
 	LimitedTpsThreshold uint64
 	NoTxsThreshold      uint64
 	EmergencyThreshold  uint64
-
-	TxsCacheInvalidation time.Duration
-
-	PrevEmittedEventFile FileConfig
-	PrevBlockVotesFile   FileConfig
-	PrevEpochVoteFile    FileConfig
 }
 
 // DefaultConfig returns the default configurations for the events emitter.
@@ -67,15 +56,13 @@ func DefaultConfig() Config {
 			ParallelInstanceProtection: 1 * time.Minute,
 		},
 
-		MaxTxsPerAddress: TxTurnNonces,
+		MaxTxsPerAddress: TxTurnNonces / 3,
 
 		MaxParents: 0,
 
 		LimitedTpsThreshold: opera.DefaultEventGas * 120,
 		NoTxsThreshold:      opera.DefaultEventGas * 30,
 		EmergencyThreshold:  opera.DefaultEventGas * 5,
-
-		TxsCacheInvalidation: 200 * time.Millisecond,
 	}
 }
 
@@ -94,7 +81,7 @@ func (cfg EmitIntervals) RandomizeEmitTime(r *rand.Rand) EmitIntervals {
 }
 
 // FakeConfig returns the testing configurations for the events emitter.
-func FakeConfig(num idx.Validator) Config {
+func FakeConfig(num int) Config {
 	cfg := DefaultConfig()
 	cfg.EmitIntervals.Max = 10 * time.Second // don't wait long in fakenet
 	cfg.EmitIntervals.DoublesignProtection = cfg.EmitIntervals.Max / 2

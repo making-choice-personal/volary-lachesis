@@ -19,15 +19,11 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"gopkg.in/urfave/cli.v1"
 
-	evmetrics "github.com/ethereum/go-ethereum/metrics"
-
 	"github.com/Fantom-foundation/go-opera/cmd/opera/launcher/metrics"
 	"github.com/Fantom-foundation/go-opera/cmd/opera/launcher/tracing"
 	"github.com/Fantom-foundation/go-opera/debug"
-	"github.com/Fantom-foundation/go-opera/evmcore"
 	"github.com/Fantom-foundation/go-opera/flags"
 	"github.com/Fantom-foundation/go-opera/gossip"
-	"github.com/Fantom-foundation/go-opera/gossip/emitter"
 	"github.com/Fantom-foundation/go-opera/integration"
 	"github.com/Fantom-foundation/go-opera/utils/errlock"
 	"github.com/Fantom-foundation/go-opera/valkeystore"
@@ -46,49 +42,36 @@ var (
 	// The app that holds all commands and flags.
 	app = flags.NewApp(gitCommit, gitDate, "the go-opera command line interface")
 
-	nodeFlags        []cli.Flag
-	testFlags        []cli.Flag
-	gpoFlags         []cli.Flag
-	accountFlags     []cli.Flag
-	performanceFlags []cli.Flag
-	networkingFlags  []cli.Flag
-	txpoolFlags      []cli.Flag
-	operaFlags       []cli.Flag
-	legacyRpcFlags   []cli.Flag
-	rpcFlags         []cli.Flag
-	metricsFlags     []cli.Flag
+	testFlags    []cli.Flag
+	nodeFlags    []cli.Flag
+	rpcFlags     []cli.Flag
+	metricsFlags []cli.Flag
 )
 
-func initFlags() {
+// init the CLI app.
+func init() {
+	overrideFlags()
+	overrideParams()
+
 	// Flags for testing purpose.
 	testFlags = []cli.Flag{
 		FakeNetFlag,
 	}
 
 	// Flags that configure the node.
-	gpoFlags = []cli.Flag{}
-	accountFlags = []cli.Flag{
+	nodeFlags = []cli.Flag{
+		GenesisFlag,
+		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
-		utils.ExternalSignerFlag,
-		utils.InsecureUnlockAllowedFlag,
-	}
-	performanceFlags = []cli.Flag{
-		CacheFlag,
-	}
-	networkingFlags = []cli.Flag{
 		utils.BootnodesFlag,
-		utils.ListenPortFlag,
-		utils.MaxPeersFlag,
-		utils.MaxPendingPeersFlag,
-		utils.NATFlag,
-		utils.NoDiscoverFlag,
-		utils.DiscoveryV5Flag,
-		utils.NetrestrictFlag,
-		utils.NodeKeyFileFlag,
-		utils.NodeKeyHexFlag,
-	}
-	txpoolFlags = []cli.Flag{
+		utils.LegacyBootnodesV4Flag,
+		utils.LegacyBootnodesV5Flag,
+		DataDirFlag,
+		utils.KeyStoreDirFlag,
+		utils.ExternalSignerFlag,
+		utils.NoUSBFlag,
+		utils.SmartCardDaemonPathFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -100,31 +83,37 @@ func initFlags() {
 		utils.TxPoolAccountQueueFlag,
 		utils.TxPoolGlobalQueueFlag,
 		utils.TxPoolLifetimeFlag,
-	}
-	operaFlags = []cli.Flag{
-		GenesisFlag,
-		utils.IdentityFlag,
-		DataDirFlag,
-		utils.MinFreeDiskSpaceFlag,
-		utils.KeyStoreDirFlag,
-		utils.USBFlag,
-		utils.SmartCardDaemonPathFlag,
 		utils.ExitWhenSyncedFlag,
+		utils.CacheFlag,
+		utils.CacheDatabaseFlag,
+		utils.CacheTrieFlag,
+		utils.CacheGCFlag,
+		utils.CacheNoPrefetchFlag,
+		utils.ListenPortFlag,
+		utils.MaxPeersFlag,
+		utils.MaxPendingPeersFlag,
+		utils.NATFlag,
+		utils.NoDiscoverFlag,
+		utils.DiscoveryV5Flag,
+		utils.NetrestrictFlag,
+		utils.NodeKeyFileFlag,
+		utils.NodeKeyHexFlag,
+		utils.VMEnableDebugFlag,
+		utils.NetworkIdFlag,
+		utils.EthStatsURLFlag,
+		utils.NoCompactionFlag,
+		utils.GpoBlocksFlag,
+		utils.LegacyGpoBlocksFlag,
+		utils.GpoPercentileFlag,
+		utils.LegacyGpoPercentileFlag,
+		utils.GpoMaxGasPriceFlag,
+		utils.EWASMInterpreterFlag,
+		utils.EVMInterpreterFlag,
 		utils.LightKDFFlag,
 		configFileFlag,
 		validatorIDFlag,
 		validatorPubkeyFlag,
 		validatorPasswordFlag,
-		SyncModeFlag,
-	}
-	legacyRpcFlags = []cli.Flag{
-		utils.NoUSBFlag,
-		utils.LegacyRPCEnabledFlag,
-		utils.LegacyRPCListenAddrFlag,
-		utils.LegacyRPCPortFlag,
-		utils.LegacyRPCCORSDomainFlag,
-		utils.LegacyRPCVirtualHostsFlag,
-		utils.LegacyRPCApiFlag,
 	}
 
 	rpcFlags = []cli.Flag{
@@ -133,57 +122,44 @@ func initFlags() {
 		utils.HTTPPortFlag,
 		utils.HTTPCORSDomainFlag,
 		utils.HTTPVirtualHostsFlag,
+		utils.LegacyRPCEnabledFlag,
+		utils.LegacyRPCListenAddrFlag,
+		utils.LegacyRPCPortFlag,
+		utils.LegacyRPCCORSDomainFlag,
+		utils.LegacyRPCVirtualHostsFlag,
 		utils.GraphQLEnabledFlag,
 		utils.GraphQLCORSDomainFlag,
 		utils.GraphQLVirtualHostsFlag,
 		utils.HTTPApiFlag,
-		utils.HTTPPathPrefixFlag,
+		utils.LegacyRPCApiFlag,
 		utils.WSEnabledFlag,
 		utils.WSListenAddrFlag,
+		utils.LegacyWSListenAddrFlag,
 		utils.WSPortFlag,
+		utils.LegacyWSPortFlag,
 		utils.WSApiFlag,
+		utils.LegacyWSApiFlag,
 		utils.WSAllowedOriginsFlag,
-		utils.WSPathPrefixFlag,
+		utils.LegacyWSAllowedOriginsFlag,
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
-		RPCGlobalGasCapFlag,
-		RPCGlobalTxFeeCapFlag,
+		utils.InsecureUnlockAllowedFlag,
+		utils.RPCGlobalGasCap,
+		utils.RPCGlobalTxFeeCap,
 	}
 
 	metricsFlags = []cli.Flag{
 		utils.MetricsEnabledFlag,
 		utils.MetricsEnabledExpensiveFlag,
-		utils.MetricsHTTPFlag,
-		utils.MetricsPortFlag,
 		utils.MetricsEnableInfluxDBFlag,
 		utils.MetricsInfluxDBEndpointFlag,
 		utils.MetricsInfluxDBDatabaseFlag,
 		utils.MetricsInfluxDBUsernameFlag,
 		utils.MetricsInfluxDBPasswordFlag,
 		utils.MetricsInfluxDBTagsFlag,
-		utils.MetricsEnableInfluxDBV2Flag,
-		utils.MetricsInfluxDBTokenFlag,
-		utils.MetricsInfluxDBBucketFlag,
-		utils.MetricsInfluxDBOrganizationFlag,
+		metrics.PrometheusEndpointFlag,
 		tracing.EnableFlag,
 	}
-
-	nodeFlags = []cli.Flag{}
-	nodeFlags = append(nodeFlags, gpoFlags...)
-	nodeFlags = append(nodeFlags, accountFlags...)
-	nodeFlags = append(nodeFlags, performanceFlags...)
-	nodeFlags = append(nodeFlags, networkingFlags...)
-	nodeFlags = append(nodeFlags, txpoolFlags...)
-	nodeFlags = append(nodeFlags, operaFlags...)
-	nodeFlags = append(nodeFlags, legacyRpcFlags...)
-}
-
-// init the CLI app.
-func init() {
-	overrideFlags()
-	overrideParams()
-
-	initFlags()
 
 	// App.
 
@@ -209,9 +185,6 @@ func init() {
 		// See chaincmd.go
 		importCommand,
 		exportCommand,
-		checkCommand,
-		// See snapshot.go
-		snapshotCommand,
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
@@ -229,8 +202,8 @@ func init() {
 
 		// Start metrics export if enabled
 		utils.SetupMetrics(ctx)
-		// Start system runtime metrics collection
-		go evmetrics.CollectProcessMetrics(3 * time.Second)
+		metrics.SetupPrometheus(ctx)
+
 		return nil
 	}
 
@@ -243,6 +216,8 @@ func init() {
 }
 
 func Launch(args []string) error {
+	overrideFlags()
+	overrideParams()
 	return app.Run(args)
 }
 
@@ -272,6 +247,7 @@ func lachesisMain(ctx *cli.Context) error {
 
 func makeNode(ctx *cli.Context, cfg *config, genesis integration.InputGenesis) (*node.Node, *gossip.Service, func()) {
 	// check errlock file
+	// TODO: do the same with with stack.OpenDatabaseWithFreezer()
 	errlock.SetDefaultDatadir(cfg.Node.DataDir)
 	errlock.Check()
 
@@ -281,13 +257,13 @@ func makeNode(ctx *cli.Context, cfg *config, genesis integration.InputGenesis) (
 	if err := os.MkdirAll(chaindataDir, 0700); err != nil {
 		utils.Fatalf("Failed to create chaindata directory: %v", err)
 	}
-	engine, dagIndex, gdb, cdb, genesisStore, blockProc := integration.MakeEngine(integration.DBProducer(chaindataDir, cfg.cachescale), genesis, cfg.AppConfigs())
+	engine, dagIndex, gdb, cdb, genesisStore, blockProc := integration.MakeEngine(integration.DBProducer(chaindataDir), genesis, cfg.AppConfigs())
 	_ = genesis.Close()
 	metrics.SetDataDir(cfg.Node.DataDir)
 
 	valKeystore := valkeystore.NewDefaultFileKeystore(path.Join(getValKeystoreDir(cfg.Node), "validator"))
-	valPubkey := cfg.Emitter.Validator.PubKey
-	if key := getFakeValidatorKey(ctx); key != nil && cfg.Emitter.Validator.ID != 0 {
+	valPubkey := cfg.Opera.Emitter.Validator.PubKey
+	if key := getFakeValidatorKey(ctx); key != nil && cfg.Opera.Emitter.Validator.ID != 0 {
 		addFakeValidatorKey(ctx, key, valPubkey, valKeystore)
 		coinbase := integration.SetAccountKey(stack.AccountManager(), key, "fakepassword")
 		log.Info("Unlocked fake validator account", "address", coinbase.Address.Hex())
@@ -303,18 +279,10 @@ func makeNode(ctx *cli.Context, cfg *config, genesis integration.InputGenesis) (
 	signer := valkeystore.NewSigner(valKeystore)
 
 	// Create and register a gossip network service.
-	newTxPool := func(reader evmcore.StateReader) gossip.TxPool {
-		if cfg.TxPool.Journal != "" {
-			cfg.TxPool.Journal = stack.ResolvePath(cfg.TxPool.Journal)
-		}
-		return evmcore.NewTxPool(cfg.TxPool, reader.Config(), reader)
-	}
-	svc, err := gossip.NewService(stack, cfg.Opera, gdb, blockProc, engine, dagIndex, newTxPool)
+
+	svc, err := gossip.NewService(stack, cfg.Opera, gdb, signer, blockProc, engine, dagIndex)
 	if err != nil {
 		utils.Fatalf("Failed to create the service: %v", err)
-	}
-	if cfg.Emitter.Validator.ID != 0 {
-		svc.RegisterEmitter(emitter.NewEmitter(cfg.Emitter, svc.EmitterWorld(signer)))
 	}
 	err = engine.Bootstrap(svc.GetConsensusCallbacks())
 	if err != nil {
@@ -348,7 +316,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	debug.Memsize.Add("node", stack)
 
 	// Start up the node itself
-	utils.StartNode(ctx, stack)
+	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
 	unlockAccounts(ctx, stack)
@@ -363,6 +331,26 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		utils.Fatalf("Failed to attach to self: %v", err)
 	}
 	ethClient := ethclient.NewClient(rpcClient)
+	/*
+		// Set contract backend for ethereum service if local node
+		// is serving LES requests.
+		if ctx.GlobalInt(utils.LightLegacyServFlag.Name) > 0 || ctx.GlobalInt(utils.LightServeFlag.Name) > 0 {
+			var ethService *eth.Ethereum
+			if err := stack.Service(&ethService); err != nil {
+				utils.Fatalf("Failed to retrieve ethereum service: %v", err)
+			}
+			ethService.SetContractBackend(ethClient)
+		}
+		// Set contract backend for les service if local node is
+		// running as a light client.
+		if ctx.GlobalString(utils.SyncModeFlag.Name) == "light" {
+			var lesService *les.LightEthereum
+			if err := stack.Service(&lesService); err != nil {
+				utils.Fatalf("Failed to retrieve light ethereum service: %v", err)
+			}
+			lesService.SetContractBackend(ethClient)
+		}
+	*/
 	go func() {
 		// Open any wallets already attached
 		for _, wallet := range stack.AccountManager().Wallets() {
@@ -401,11 +389,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	if ctx.GlobalBool(utils.ExitWhenSyncedFlag.Name) {
 		go func() {
 			for first := true; ; first = false {
-				// Call vlry_syncing until it returns false
+				// Call ftm_syncing until it returns false
 				time.Sleep(5 * time.Second)
 
 				var syncing bool
-				err := rpcClient.CallContext(context.TODO(), &syncing, "vlry_syncing")
+				err := rpcClient.CallContext(context.TODO(), &syncing, "ftm_syncing")
 				if err != nil {
 					continue
 				}

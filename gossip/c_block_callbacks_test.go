@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
@@ -17,49 +16,47 @@ func TestConsensusCallback(t *testing.T) {
 	logger.SetTestMode(t)
 	require := require.New(t)
 
-	const rounds = 30
+	const blockCount = 100
 
-	const validatorsNum = 3
-
-	env := newTestEnv(2, validatorsNum)
+	env := newTestEnv()
 	defer env.Close()
 
+	accounts := len(env.validators)
+
 	// save start balances
-	balances := make([]*big.Int, validatorsNum)
+	balances := make([]*big.Int, accounts)
 	for i := range balances {
-		balances[i] = env.State().GetBalance(env.Address(idx.ValidatorID(i + 1)))
+		balances[i] = env.State().GetBalance(env.Address(i + 1))
 	}
 
-	for n := uint64(0); n < rounds; n++ {
+	for n := uint64(0); n < blockCount; n++ {
 		// transfers
-		txs := make([]*types.Transaction, validatorsNum)
-		for i := idx.Validator(0); i < validatorsNum; i++ {
-			from := i % validatorsNum
-			to := 0
-			txs[i] = env.Transfer(idx.ValidatorID(from+1), idx.ValidatorID(to+1), utils.ToVlry(100))
+		txs := make([]*types.Transaction, accounts)
+		for i := range txs {
+			from := (i)%accounts + 1
+			to := (i+1)%accounts + 1
+			txs[i] = env.Transfer(from, to, utils.ToFtm(100))
 		}
 		tm := sameEpoch
 		if n%10 == 0 {
 			tm = nextEpoch
 		}
-		rr, err := env.ApplyTxs(tm, txs...)
-		require.NoError(err)
-		// subtract fees
+		rr := env.ApplyBlock(tm, txs...)
 		for i, r := range rr {
 			fee := big.NewInt(0).Mul(new(big.Int).SetUint64(r.GasUsed), txs[i].GasPrice())
 			balances[i] = big.NewInt(0).Sub(balances[i], fee)
 		}
-		// balance movements
-		balances[0].Add(balances[0], utils.ToVlry(200))
-		balances[1].Sub(balances[1], utils.ToVlry(100))
-		balances[2].Sub(balances[2], utils.ToVlry(100))
+
+		// some acts to check data race
+		bs := env.store.GetBlockState()
+		require.LessOrEqual(n+2, uint64(bs.LastBlock.Idx))
 	}
 
 	// check balances
 	for i := range balances {
 		require.Equal(
 			balances[i],
-			env.State().GetBalance(env.Address(idx.ValidatorID(i+1))),
+			env.State().GetBalance(env.Address(i+1)),
 			fmt.Sprintf("account%d", i),
 		)
 	}

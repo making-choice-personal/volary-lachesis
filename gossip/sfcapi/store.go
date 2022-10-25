@@ -32,8 +32,8 @@ type Store struct {
 func NewStore(mainDB kvdb.Store) *Store {
 	s := &Store{
 		mainDB:   mainDB,
-		Instance: logger.New("sfcapi-store"),
-		rlp:      rlpstore.Helper{logger.New("rlp")},
+		Instance: logger.MakeInstance(),
+		rlp:      rlpstore.Helper{logger.MakeInstance()},
 	}
 
 	table.MigrateTables(&s.table, s.mainDB)

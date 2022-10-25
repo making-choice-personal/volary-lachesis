@@ -14,7 +14,6 @@ import (
 	"github.com/Fantom-foundation/go-opera/gossip/blockproc"
 	"github.com/Fantom-foundation/go-opera/inter"
 	"github.com/Fantom-foundation/go-opera/inter/drivertype"
-	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
 	"github.com/Fantom-foundation/go-opera/inter/validatorpk"
 	"github.com/Fantom-foundation/go-opera/opera"
 	"github.com/Fantom-foundation/go-opera/opera/genesis"
@@ -38,7 +37,7 @@ func NewDriverTxListenerModule() *DriverTxListenerModule {
 	return &DriverTxListenerModule{}
 }
 
-func (m *DriverTxListenerModule) Start(block iblockproc.BlockCtx, bs iblockproc.BlockState, es iblockproc.EpochState, statedb *state.StateDB) blockproc.TxListener {
+func (m *DriverTxListenerModule) Start(block blockproc.BlockCtx, bs blockproc.BlockState, es blockproc.EpochState, statedb *state.StateDB) blockproc.TxListener {
 	return &DriverTxListener{
 		block:   block,
 		es:      es,
@@ -48,9 +47,9 @@ func (m *DriverTxListenerModule) Start(block iblockproc.BlockCtx, bs iblockproc.
 }
 
 type DriverTxListener struct {
-	block   iblockproc.BlockCtx
-	es      iblockproc.EpochState
-	bs      iblockproc.BlockState
+	block   blockproc.BlockCtx
+	es      blockproc.EpochState
+	bs      blockproc.BlockState
 	statedb *state.StateDB
 }
 
@@ -88,7 +87,7 @@ func internalTxBuilder(statedb *state.StateDB) func(calldata []byte, addr common
 	}
 }
 
-func (p *DriverTxGenesisTransactor) PopInternalTxs(_ iblockproc.BlockCtx, _ iblockproc.BlockState, es iblockproc.EpochState, _ bool, statedb *state.StateDB) types.Transactions {
+func (p *DriverTxGenesisTransactor) PopInternalTxs(_ blockproc.BlockCtx, _ blockproc.BlockState, es blockproc.EpochState, _ bool, statedb *state.StateDB) types.Transactions {
 	buildTx := internalTxBuilder(statedb)
 	internalTxs := make(types.Transactions, 0, 15)
 	// initialization
@@ -117,12 +116,17 @@ func maxBlockIdx(a, b idx.Block) idx.Block {
 	return b
 }
 
-func (p *DriverTxPreTransactor) PopInternalTxs(block iblockproc.BlockCtx, bs iblockproc.BlockState, es iblockproc.EpochState, sealing bool, statedb *state.StateDB) types.Transactions {
+func (p *DriverTxPreTransactor) PopInternalTxs(block blockproc.BlockCtx, bs blockproc.BlockState, es blockproc.EpochState, sealing bool, statedb *state.StateDB) types.Transactions {
 	buildTx := internalTxBuilder(statedb)
 	internalTxs := make(types.Transactions, 0, 8)
 
 	// write cheaters
-	for _, validatorID := range bs.EpochCheaters[bs.CheatersWritten:] {
+	for _, validatorID := range bs.EpochCheaters {
+		valIdx := es.Validators.GetIdx(validatorID)
+		if bs.ValidatorStates[valIdx].Cheater {
+			continue
+		}
+		bs.ValidatorStates[valIdx].Cheater = true
 		calldata := drivercall.DeactivateValidator(validatorID, drivertype.DoublesignBit)
 		internalTxs = append(internalTxs, buildTx(calldata, driver.ContractAddress))
 	}
@@ -155,7 +159,7 @@ func (p *DriverTxPreTransactor) PopInternalTxs(block iblockproc.BlockCtx, bs ibl
 	return internalTxs
 }
 
-func (p *DriverTxTransactor) PopInternalTxs(_ iblockproc.BlockCtx, _ iblockproc.BlockState, es iblockproc.EpochState, sealing bool, statedb *state.StateDB) types.Transactions {
+func (p *DriverTxTransactor) PopInternalTxs(_ blockproc.BlockCtx, _ blockproc.BlockState, es blockproc.EpochState, sealing bool, statedb *state.StateDB) types.Transactions {
 	buildTx := internalTxBuilder(statedb)
 	internalTxs := make(types.Transactions, 0, 1)
 	// push data into Driver after epoch sealing
@@ -247,16 +251,11 @@ func (p *DriverTxListener) OnNewLog(l *types.Log) {
 			return
 		}
 
-		last := &p.es.Rules
-		if p.bs.DirtyRules != nil {
-			last = p.bs.DirtyRules
-		}
-		updated, err := opera.UpdateRules(*last, diff)
+		p.bs.DirtyRules, err = opera.UpdateRules(p.bs.DirtyRules, diff)
 		if err != nil {
 			log.Warn("Network rules update error", "err", err)
 			return
 		}
-		p.bs.DirtyRules = &updated
 	}
 	// Advance epochs
 	if l.Topics[0] == driverpos.Topics.AdvanceEpochs && len(l.Data) >= 32 {
@@ -270,10 +269,10 @@ func (p *DriverTxListener) OnNewLog(l *types.Log) {
 	}
 }
 
-func (p *DriverTxListener) Update(bs iblockproc.BlockState, es iblockproc.EpochState) {
+func (p *DriverTxListener) Update(bs blockproc.BlockState, es blockproc.EpochState) {
 	p.bs, p.es = bs, es
 }
 
-func (p *DriverTxListener) Finalize() iblockproc.BlockState {
+func (p *DriverTxListener) Finalize() blockproc.BlockState {
 	return p.bs
 }

@@ -3,7 +3,6 @@ package topicsdb
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/kvdb"
@@ -13,10 +12,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
-const MaxTopicsCount = math.MaxUint8
+const MaxTopicsCount = 0xff
 
 var (
-	ErrEmptyTopics = fmt.Errorf("Empty topics")
+	ErrTooManyTopics = fmt.Errorf("Too many topics")
+	ErrEmptyTopics   = fmt.Errorf("Empty topics")
 )
 
 // Index is a specialized indexes for log records storing and fetching.
@@ -58,8 +58,7 @@ func (tt *Index) FindInBlocks(ctx context.Context, from, to idx.Block, pattern [
 
 // ForEach matches log records by pattern. 1st pattern element is an address.
 func (tt *Index) ForEach(ctx context.Context, pattern [][]common.Hash, onLog func(*types.Log) (gonext bool)) error {
-	pattern, err := limitPattern(pattern)
-	if err != nil {
+	if err := checkPattern(pattern); err != nil {
 		return err
 	}
 
@@ -73,7 +72,7 @@ func (tt *Index) ForEach(ctx context.Context, pattern [][]common.Hash, onLog fun
 		return
 	}
 
-	return tt.searchLazy(ctx, pattern, nil, 0, onMatched)
+	return tt.searchLazy(ctx, pattern, nil, onMatched)
 }
 
 // ForEachInBlocks matches log records of block range by pattern. 1st pattern element is an address.
@@ -82,12 +81,15 @@ func (tt *Index) ForEachInBlocks(ctx context.Context, from, to idx.Block, patter
 		return nil
 	}
 
-	pattern, err := limitPattern(pattern)
-	if err != nil {
+	if err := checkPattern(pattern); err != nil {
 		return err
 	}
 
 	onMatched := func(rec *logrec) (gonext bool, err error) {
+		if rec.ID.BlockNumber() > uint64(to) {
+			return
+		}
+
 		rec.fetch(tt.table.Logrec)
 		if rec.err != nil {
 			err = rec.err
@@ -97,43 +99,26 @@ func (tt *Index) ForEachInBlocks(ctx context.Context, from, to idx.Block, patter
 		return
 	}
 
-	return tt.searchLazy(ctx, pattern, uintToBytes(uint64(from)), uint64(to), onMatched)
+	return tt.searchLazy(ctx, pattern, uintToBytes(uint64(from)), onMatched)
 }
 
-func limitPattern(pattern [][]common.Hash) (limited [][]common.Hash, err error) {
+func checkPattern(pattern [][]common.Hash) error {
 	if len(pattern) > MaxTopicsCount {
-		limited = make([][]common.Hash, MaxTopicsCount)
-	} else {
-		limited = make([][]common.Hash, len(pattern))
+		return ErrTooManyTopics
 	}
-	copy(limited, pattern)
 
 	ok := false
-	for i, variants := range limited {
-		ok = ok || len(variants) > 0
-		if len(variants) > 1 {
-			limited[i] = uniqOnly(variants)
+	for _, variants := range pattern {
+		if len(variants) > MaxTopicsCount {
+			return ErrTooManyTopics
 		}
+		ok = ok || len(variants) > 0
 	}
 	if !ok {
-		err = ErrEmptyTopics
-		return
+		return ErrEmptyTopics
 	}
 
-	return
-}
-
-func uniqOnly(hh []common.Hash) []common.Hash {
-	index := make(map[common.Hash]struct{}, len(hh))
-	for _, h := range hh {
-		index[h] = struct{}{}
-	}
-
-	uniq := make([]common.Hash, 0, len(index))
-	for h := range index {
-		uniq = append(uniq, h)
-	}
-	return uniq
+	return nil
 }
 
 // MustPush calls Write() and panics if error.
@@ -147,13 +132,17 @@ func (tt *Index) MustPush(recs ...*types.Log) {
 // Write log record to database.
 func (tt *Index) Push(recs ...*types.Log) error {
 	for _, rec := range recs {
+		if len(rec.Topics) > MaxTopicsCount {
+			return ErrTooManyTopics
+		}
+
 		var (
 			id    = NewID(rec.BlockNumber, rec.TxHash, rec.Index)
 			count = posToBytes(uint8(len(rec.Topics)))
-			pos   uint8
+			pos   int
 		)
 		pushIndex := func(topic common.Hash) error {
-			key := topicKey(topic, pos, id)
+			key := topicKey(topic, uint8(pos), id)
 			if err := tt.table.Topic.Put(key, count); err != nil {
 				return err
 			}
@@ -166,10 +155,7 @@ func (tt *Index) Push(recs ...*types.Log) error {
 		}
 
 		buf := make([]byte, 0, common.HashLength*len(rec.Topics)+common.HashLength+common.AddressLength+len(rec.Data))
-		for j, topic := range rec.Topics {
-			if j >= MaxTopicsCount {
-				break // to don't overflow the pos
-			}
+		for _, topic := range rec.Topics {
 			if err := pushIndex(topic); err != nil {
 				return err
 			}

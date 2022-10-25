@@ -7,42 +7,41 @@ import (
 
 	"github.com/Fantom-foundation/go-opera/evmcore"
 	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
 	"github.com/Fantom-foundation/go-opera/opera"
 )
 
 type TxListener interface {
 	OnNewLog(*types.Log)
 	OnNewReceipt(tx *types.Transaction, r *types.Receipt, originator idx.ValidatorID)
-	Finalize() iblockproc.BlockState
-	Update(bs iblockproc.BlockState, es iblockproc.EpochState)
+	Finalize() BlockState
+	Update(bs BlockState, es EpochState)
 }
 
 type TxListenerModule interface {
-	Start(block iblockproc.BlockCtx, bs iblockproc.BlockState, es iblockproc.EpochState, statedb *state.StateDB) TxListener
+	Start(block BlockCtx, bs BlockState, es EpochState, statedb *state.StateDB) TxListener
 }
 
 type TxTransactor interface {
-	PopInternalTxs(block iblockproc.BlockCtx, bs iblockproc.BlockState, es iblockproc.EpochState, sealing bool, statedb *state.StateDB) types.Transactions
+	PopInternalTxs(block BlockCtx, bs BlockState, es EpochState, sealing bool, statedb *state.StateDB) types.Transactions
 }
 
 type SealerProcessor interface {
 	EpochSealing() bool
-	SealEpoch() (iblockproc.BlockState, iblockproc.EpochState)
-	Update(bs iblockproc.BlockState, es iblockproc.EpochState)
+	SealEpoch() (BlockState, EpochState)
+	Update(bs BlockState, es EpochState)
 }
 
 type SealerModule interface {
-	Start(block iblockproc.BlockCtx, bs iblockproc.BlockState, es iblockproc.EpochState) SealerProcessor
+	Start(block BlockCtx, bs BlockState, es EpochState) SealerProcessor
 }
 
 type ConfirmedEventsProcessor interface {
 	ProcessConfirmedEvent(inter.EventI)
-	Finalize(block iblockproc.BlockCtx, blockSkipped bool) iblockproc.BlockState
+	Finalize(block BlockCtx, blockSkipped bool) BlockState
 }
 
 type ConfirmedEventsModule interface {
-	Start(bs iblockproc.BlockState, es iblockproc.EpochState) ConfirmedEventsProcessor
+	Start(bs BlockState, es EpochState) ConfirmedEventsProcessor
 }
 
 type EVMProcessor interface {
@@ -51,5 +50,5 @@ type EVMProcessor interface {
 }
 
 type EVM interface {
-	Start(block iblockproc.BlockCtx, statedb *state.StateDB, reader evmcore.DummyChain, onNewLog func(*types.Log), net opera.Rules) EVMProcessor
+	Start(block BlockCtx, statedb *state.StateDB, reader evmcore.DummyChain, onNewLog func(*types.Log), net opera.Rules) EVMProcessor
 }

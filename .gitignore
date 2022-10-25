@@ -1,6 +1,3 @@
-# MacOS
-.DS_Store
-
 # IDE
 .vscode
 .idea/
@@ -51,7 +48,6 @@ lachesis_*
 *.graph
 *.gv
 *.finality
-testnet.g
 
 # Backup copies
 *~

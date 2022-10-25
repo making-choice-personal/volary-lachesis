@@ -12,7 +12,7 @@ import (
 func (s *Store) applyRawEvmItems(db kvdb.Iteratee) (err error) {
 	it := db.NewIterator(nil, nil)
 	defer it.Release()
-	batch := s.EvmDb.NewBatch()
+	batch := s.table.Evm.NewBatch()
 	defer batch.Reset()
 	for it.Next() {
 		err = batch.Put(it.Key(), it.Value())

@@ -7,7 +7,6 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 	"github.com/Fantom-foundation/lachesis-base/kvdb"
 	"github.com/Fantom-foundation/lachesis-base/kvdb/table"
-	"github.com/Fantom-foundation/lachesis-base/utils/cachescale"
 	"github.com/Fantom-foundation/lachesis-base/utils/wlru"
 	"github.com/Fantom-foundation/lachesis-base/vecengine"
 	"github.com/Fantom-foundation/lachesis-base/vecfc"
@@ -49,11 +48,11 @@ type Index struct {
 }
 
 // DefaultConfig returns default index config
-func DefaultConfig(scale cachescale.Func) IndexConfig {
+func DefaultConfig() IndexConfig {
 	return IndexConfig{
-		Fc: vecfc.DefaultConfig(scale),
+		Fc: vecfc.DefaultConfig(),
 		Caches: IndexCacheConfig{
-			HighestBeforeTimeSize: scale.U(160 * 1024),
+			HighestBeforeTimeSize: 160 * 1024,
 		},
 	}
 }

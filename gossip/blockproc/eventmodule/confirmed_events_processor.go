@@ -3,7 +3,6 @@ package eventmodule
 import (
 	"github.com/Fantom-foundation/go-opera/gossip/blockproc"
 	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/inter/iblockproc"
 )
 
 type ValidatorEventsModule struct{}
@@ -12,7 +11,7 @@ func New() *ValidatorEventsModule {
 	return &ValidatorEventsModule{}
 }
 
-func (m *ValidatorEventsModule) Start(bs iblockproc.BlockState, es iblockproc.EpochState) blockproc.ConfirmedEventsProcessor {
+func (m *ValidatorEventsModule) Start(bs blockproc.BlockState, es blockproc.EpochState) blockproc.ConfirmedEventsProcessor {
 	return &ValidatorEventsProcessor{
 		es:                     es,
 		bs:                     bs,
@@ -21,8 +20,8 @@ func (m *ValidatorEventsModule) Start(bs iblockproc.BlockState, es iblockproc.Ep
 }
 
 type ValidatorEventsProcessor struct {
-	es                     iblockproc.EpochState
-	bs                     iblockproc.BlockState
+	es                     blockproc.EpochState
+	bs                     blockproc.BlockState
 	validatorHighestEvents inter.EventIs
 }
 
@@ -35,7 +34,7 @@ func (p *ValidatorEventsProcessor) ProcessConfirmedEvent(e inter.EventI) {
 	p.bs.EpochGas += e.GasPowerUsed()
 }
 
-func (p *ValidatorEventsProcessor) Finalize(block iblockproc.BlockCtx, _ bool) iblockproc.BlockState {
+func (p *ValidatorEventsProcessor) Finalize(block blockproc.BlockCtx, _ bool) blockproc.BlockState {
 	for _, v := range p.bs.EpochCheaters {
 		creatorIdx := p.es.Validators.GetIdx(v)
 		p.validatorHighestEvents[creatorIdx] = nil
@@ -46,22 +45,14 @@ func (p *ValidatorEventsProcessor) Finalize(block iblockproc.BlockCtx, _ bool) i
 		}
 		info := p.bs.ValidatorStates[creatorIdx]
 		if block.Idx <= info.LastBlock+p.es.Rules.Economy.BlockMissedSlack {
-			prevOnlineTime := info.LastOnlineTime
-			if p.es.Rules.Upgrades.Berlin {
-				prevOnlineTime = inter.MaxTimestamp(info.LastOnlineTime, p.es.EpochStart)
-			}
-			if e.MedianTime() > prevOnlineTime {
-				info.Uptime += e.MedianTime() - prevOnlineTime
+			if e.MedianTime() > info.LastOnlineTime {
+				info.Uptime += e.MedianTime() - info.LastOnlineTime
 			}
 		}
 		info.LastGasPowerLeft = e.GasPowerLeft()
 		info.LastOnlineTime = e.MedianTime()
 		info.LastBlock = block.Idx
-		info.LastEvent = iblockproc.EventInfo{
-			ID:           e.ID(),
-			GasPowerLeft: e.GasPowerLeft(),
-			Time:         e.MedianTime(),
-		}
+		info.LastEvent = e.ID()
 		p.bs.ValidatorStates[creatorIdx] = info
 	}
 	return p.bs

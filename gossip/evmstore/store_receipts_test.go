@@ -11,8 +11,8 @@ import (
 	"github.com/Fantom-foundation/go-opera/logger"
 )
 
-func equalStorageReceipts(t *testing.T, expect, got []*types.ReceiptForStorage) {
-	assert.EqualValues(t, len(expect), len(got))
+func equalStorageReceipts(t *testing.T, expect, got types.Receipts) {
+	assert.EqualValues(t, expect.Len(), got.Len())
 	for i := range expect {
 		assert.EqualValues(t, expect[i].CumulativeGasUsed, got[i].CumulativeGasUsed)
 		assert.EqualValues(t, expect[i].Logs, got[i].Logs)
@@ -25,9 +25,9 @@ func TestStoreGetCachedReceipts(t *testing.T) {
 
 	block, expect := fakeReceipts()
 	store := cachedStore()
-	store.SetRawReceipts(block, expect)
+	store.SetReceipts(block, expect)
 
-	got, _ := store.GetRawReceipts(block)
+	got := store.GetReceipts(block)
 	assert.EqualValues(t, expect, got)
 }
 
@@ -36,59 +36,59 @@ func TestStoreGetNonCachedReceipts(t *testing.T) {
 
 	block, expect := fakeReceipts()
 	store := nonCachedStore()
-	store.SetRawReceipts(block, expect)
+	store.SetReceipts(block, expect)
 
-	got, _ := store.GetRawReceipts(block)
+	got := store.GetReceipts(block)
 	equalStorageReceipts(t, expect, got)
 }
 
-func BenchmarkStoreGetRawReceipts(b *testing.B) {
+func BenchmarkStoreGetReceipts(b *testing.B) {
 	logger.SetTestMode(b)
 
 	b.Run("cache on", func(b *testing.B) {
-		benchStoreGetRawReceipts(b, cachedStore())
+		benchStoreGetReceipts(b, cachedStore())
 	})
 	b.Run("cache off", func(b *testing.B) {
-		benchStoreGetRawReceipts(b, nonCachedStore())
+		benchStoreGetReceipts(b, nonCachedStore())
 	})
 }
 
-func benchStoreGetRawReceipts(b *testing.B, store *Store) {
+func benchStoreGetReceipts(b *testing.B, store *Store) {
 	block, receipt := fakeReceipts()
 
-	store.SetRawReceipts(block, receipt)
+	store.SetReceipts(block, receipt)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		if v, _ := store.GetRawReceipts(block); v == nil {
+		if store.GetReceipts(block) == nil {
 			b.Fatal("invalid result")
 		}
 	}
 }
 
-func BenchmarkStoreSetRawReceipts(b *testing.B) {
+func BenchmarkStoreSetReceipts(b *testing.B) {
 	logger.SetTestMode(b)
 
 	b.Run("cache on", func(b *testing.B) {
-		benchStoreSetRawReceipts(b, cachedStore())
+		benchStoreSetReceipts(b, cachedStore())
 	})
 	b.Run("cache off", func(b *testing.B) {
-		benchStoreSetRawReceipts(b, nonCachedStore())
+		benchStoreSetReceipts(b, nonCachedStore())
 	})
 }
 
-func benchStoreSetRawReceipts(b *testing.B, store *Store) {
+func benchStoreSetReceipts(b *testing.B, store *Store) {
 	block, receipt := fakeReceipts()
 
 	for i := 0; i < b.N; i++ {
-		store.SetRawReceipts(block, receipt)
+		store.SetReceipts(block, receipt)
 	}
 }
 
-func fakeReceipts() (idx.Block, []*types.ReceiptForStorage) {
+func fakeReceipts() (idx.Block, types.Receipts) {
 	return idx.Block(1),
-		[]*types.ReceiptForStorage{
-			&types.ReceiptForStorage{
+		types.Receipts{
+			&types.Receipt{
 				PostState:         nil,
 				Status:            0,
 				CumulativeGasUsed: 0,

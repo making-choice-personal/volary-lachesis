@@ -3,6 +3,7 @@ package topicsdb
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/kvdb/memorydb"
@@ -15,6 +16,7 @@ func BenchmarkSearch(b *testing.B) {
 	topics, recs, topics4rec := genTestData(1000)
 
 	mem := memorydb.New()
+	mem.SetDelay(1 * time.Millisecond)
 	index := New(mem)
 
 	for _, rec := range recs {

@@ -6,14 +6,13 @@ package evmstore
 
 import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // SetReceipts stores transaction receipts.
 func (s *Store) SetReceipts(n idx.Block, receipts types.Receipts) {
-	receiptsStorage := make([]*types.ReceiptForStorage, receipts.Len())
+	receiptsStorage := make([]*types.ReceiptForStorage, len(receipts))
 	for i, r := range receipts {
 		receiptsStorage[i] = (*types.ReceiptForStorage)(r)
 	}
@@ -41,39 +40,8 @@ func (s *Store) SetRawReceipts(n idx.Block, receipts []*types.ReceiptForStorage)
 	return len(buf)
 }
 
-func (s *Store) GetRawReceiptsRLP(n idx.Block) rlp.RawValue {
-	buf, err := s.table.Receipts.Get(n.Bytes())
-	if err != nil {
-		s.Log.Crit("Failed to get key-value", "err", err)
-	}
-	return buf
-}
-
-func (s *Store) GetRawReceipts(n idx.Block) ([]*types.ReceiptForStorage, int) {
-	buf := s.GetRawReceiptsRLP(n)
-	if buf == nil {
-		return nil, 0
-	}
-
-	var receiptsStorage []*types.ReceiptForStorage
-	err := rlp.DecodeBytes(buf, &receiptsStorage)
-	if err != nil {
-		s.Log.Crit("Failed to decode rlp", "err", err, "size", len(buf))
-	}
-	return receiptsStorage, len(buf)
-}
-
-func UnwrapStorageReceipts(receiptsStorage []*types.ReceiptForStorage, n idx.Block, signer types.Signer, hash common.Hash, txs types.Transactions) (types.Receipts, error) {
-	receipts := make(types.Receipts, len(receiptsStorage))
-	for i, r := range receiptsStorage {
-		receipts[i] = (*types.Receipt)(r)
-	}
-	err := receipts.DeriveFields(signer, hash, uint64(n), txs)
-	return receipts, err
-}
-
 // GetReceipts returns stored transaction receipts.
-func (s *Store) GetReceipts(n idx.Block, signer types.Signer, hash common.Hash, txs types.Transactions) types.Receipts {
+func (s *Store) GetReceipts(n idx.Block) types.Receipts {
 	// Get data from LRU cache first.
 	if s.cache.Receipts != nil {
 		if c, ok := s.cache.Receipts.Get(n); ok {
@@ -81,15 +49,32 @@ func (s *Store) GetReceipts(n idx.Block, signer types.Signer, hash common.Hash, 
 		}
 	}
 
-	receiptsStorage, size := s.GetRawReceipts(n)
-
-	receipts, err := UnwrapStorageReceipts(receiptsStorage, n, signer, hash, txs)
+	buf, err := s.table.Receipts.Get(n.Bytes())
 	if err != nil {
-		s.Log.Crit("Failed to derive receipts", "err", err)
+		s.Log.Crit("Failed to get key-value", "err", err)
+	}
+	if buf == nil {
+		return nil
+	}
+
+	var receiptsStorage *[]*types.ReceiptForStorage
+	err = rlp.DecodeBytes(buf, &receiptsStorage)
+	if err != nil {
+		s.Log.Crit("Failed to decode rlp", "err", err, "size", len(buf))
+	}
+
+	receipts := make(types.Receipts, len(*receiptsStorage))
+	for i, r := range *receiptsStorage {
+		receipts[i] = (*types.Receipt)(r)
+		var prev uint64
+		if i != 0 {
+			prev = receipts[i-1].CumulativeGasUsed
+		}
+		receipts[i].GasUsed = receipts[i].CumulativeGasUsed - prev
 	}
 
 	// Add to LRU cache.
-	s.cache.Receipts.Add(n, receipts, uint(size))
+	s.cache.Receipts.Add(n, receipts, uint(len(buf)))
 
 	return receipts
 }

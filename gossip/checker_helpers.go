@@ -3,6 +3,7 @@ package gossip
 import (
 	"sync/atomic"
 
+	"github.com/Fantom-foundation/lachesis-base/hash"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 
@@ -50,7 +51,9 @@ func NewGasPowerContext(s *Store, validators *pos.Validators, epoch idx.Epoch, c
 	es := s.GetEpochState()
 	for i, val := range es.ValidatorStates {
 		validatorStates[i].GasRefund = val.GasRefund
-		validatorStates[i].PrevEpochEvent = val.PrevEpochEvent
+		if val.PrevEpochEvent != hash.ZeroEvent {
+			validatorStates[i].PrevEpochEvent = s.GetEvent(val.PrevEpochEvent)
+		}
 	}
 
 	return &gaspowercheck.ValidationContext{
@@ -73,42 +76,20 @@ type ValidatorsPubKeys struct {
 
 // HeavyCheckReader is a helper to run heavy power checks
 type HeavyCheckReader struct {
-	Pubkeys atomic.Value
-	Store   *Store
+	Addrs atomic.Value
 }
 
 // GetEpochPubKeys is safe for concurrent use
 func (r *HeavyCheckReader) GetEpochPubKeys() (map[idx.ValidatorID]validatorpk.PubKey, idx.Epoch) {
-	auth := r.Pubkeys.Load().(*ValidatorsPubKeys)
+	auth := r.Addrs.Load().(*ValidatorsPubKeys)
 
 	return auth.PubKeys, auth.Epoch
 }
 
-// GetEpochPubKeysOf is safe for concurrent use
-func (r *HeavyCheckReader) GetEpochPubKeysOf(epoch idx.Epoch) map[idx.ValidatorID]validatorpk.PubKey {
-	auth := readEpochPubKeys(r.Store, epoch)
-	if auth == nil {
-		return nil
-	}
-	return auth.PubKeys
-}
-
-// GetEpochBlockStart is safe for concurrent use
-func (r *HeavyCheckReader) GetEpochBlockStart(epoch idx.Epoch) idx.Block {
-	bs, _ := r.Store.GetHistoryBlockEpochState(epoch)
-	if bs == nil {
-		return 0
-	}
-	return bs.LastBlock.Idx
-}
-
-// readEpochPubKeys reads epoch pubkeys
-func readEpochPubKeys(s *Store, epoch idx.Epoch) *ValidatorsPubKeys {
-	es := s.GetHistoryEpochState(epoch)
-	if es == nil {
-		return nil
-	}
-	var pubkeys = make(map[idx.ValidatorID]validatorpk.PubKey, len(es.ValidatorProfiles))
+// NewEpochPubKeys is the same as GetEpochValidators, but returns only addresses
+func NewEpochPubKeys(s *Store, epoch idx.Epoch) *ValidatorsPubKeys {
+	es := s.GetEpochState()
+	pubkeys := make(map[idx.ValidatorID]validatorpk.PubKey, len(es.ValidatorProfiles))
 	for id, profile := range es.ValidatorProfiles {
 		pubkeys[id] = profile.PubKey
 	}

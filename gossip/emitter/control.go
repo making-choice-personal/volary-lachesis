@@ -7,12 +7,12 @@ import (
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/Fantom-foundation/lachesis-base/inter/pos"
 
+	"github.com/Fantom-foundation/go-opera/gossip/emitter/piecefunc"
 	"github.com/Fantom-foundation/go-opera/inter"
-	"github.com/Fantom-foundation/go-opera/utils/piecefunc"
 )
 
 func scalarUpdMetric(diff idx.Event, weight pos.Weight, totalWeight pos.Weight) ancestor.Metric {
-	return ancestor.Metric(scalarUpdMetricF(uint64(diff)*piecefunc.DecimalUnit)) * ancestor.Metric(weight) / ancestor.Metric(totalWeight)
+	return ancestor.Metric(piecefunc.Get(uint64(diff)*piecefunc.DecimalUnit, scalarUpdMetricF)) * ancestor.Metric(weight) / ancestor.Metric(totalWeight)
 }
 
 func updMetric(median, cur, upd idx.Event, validatorIdx idx.Validator, validators *pos.Validators) ancestor.Metric {
@@ -27,7 +27,7 @@ func updMetric(median, cur, upd idx.Event, validatorIdx idx.Validator, validator
 }
 
 func eventMetric(orig ancestor.Metric, seq idx.Event) ancestor.Metric {
-	metric := ancestor.Metric(eventMetricF(uint64(orig)))
+	metric := ancestor.Metric(piecefunc.Get(uint64(orig), eventMetricF))
 	// kick start metric in a beginning of epoch, when there's nothing to observe yet
 	if seq <= 2 && metric < 0.9*piecefunc.DecimalUnit {
 		metric += 0.1 * piecefunc.DecimalUnit
@@ -38,15 +38,9 @@ func eventMetric(orig ancestor.Metric, seq idx.Event) ancestor.Metric {
 	return metric
 }
 
-func (em *Emitter) isAllowedToEmit(e inter.EventI, eTxs bool, metric ancestor.Metric, selfParent *inter.Event) bool {
+func (em *Emitter) isAllowedToEmit(e inter.EventPayloadI, metric ancestor.Metric, selfParent *inter.Event) bool {
 	passedTime := e.CreationTime().Time().Sub(em.prevEmittedAtTime)
-	if passedTime < 0 {
-		passedTime = 0
-	}
 	passedTimeIdle := e.CreationTime().Time().Sub(em.prevIdleTime)
-	if passedTimeIdle < 0 {
-		passedTimeIdle = 0
-	}
 	if em.stakeRatio[e.Creator()] < 0.35*piecefunc.DecimalUnit {
 		// top validators emit event right after transaction is originated
 		passedTimeIdle = passedTime
@@ -60,7 +54,7 @@ func (em *Emitter) isAllowedToEmit(e inter.EventI, eTxs bool, metric ancestor.Me
 	// metric is a decimal (0.0, 1.0], being an estimation of how much the event will advance the consensus
 	adjustedPassedTime := time.Duration(ancestor.Metric(passedTime/piecefunc.DecimalUnit) * metric)
 	adjustedPassedIdleTime := time.Duration(ancestor.Metric(passedTimeIdle/piecefunc.DecimalUnit) * metric)
-	passedBlocks := em.world.GetLatestBlockIndex() - em.prevEmittedAtBlock
+	passedBlocks := em.world.Store.GetLatestBlockIndex() - em.prevEmittedAtBlock
 	// Forbid emitting if not enough power and power is decreasing
 	{
 		threshold := em.config.EmergencyThreshold
@@ -76,7 +70,7 @@ func (em *Emitter) isAllowedToEmit(e inter.EventI, eTxs bool, metric ancestor.Me
 	}
 	// Enforce emitting if passed too many time/blocks since previous event
 	{
-		rules := em.world.GetRules()
+		rules := em.world.Store.GetRules()
 		maxBlocks := rules.Economy.BlockMissedSlack/2 + 1
 		if rules.Economy.BlockMissedSlack > maxBlocks && maxBlocks < rules.Economy.BlockMissedSlack-5 {
 			maxBlocks = rules.Economy.BlockMissedSlack - 5
@@ -105,7 +99,7 @@ func (em *Emitter) isAllowedToEmit(e inter.EventI, eTxs bool, metric ancestor.Me
 	{
 		if passedTime < em.intervals.Max &&
 			em.idle() &&
-			!eTxs {
+			len(e.Txs()) == 0 {
 			return false
 		}
 	}
@@ -120,7 +114,7 @@ func (em *Emitter) isAllowedToEmit(e inter.EventI, eTxs bool, metric ancestor.Me
 		}
 		if adjustedPassedIdleTime < em.intervals.Confirming &&
 			!em.idle() &&
-			!eTxs {
+			len(e.Txs()) == 0 {
 			return false
 		}
 	}
@@ -129,8 +123,8 @@ func (em *Emitter) isAllowedToEmit(e inter.EventI, eTxs bool, metric ancestor.Me
 }
 
 func (em *Emitter) recheckIdleTime() {
-	em.world.Lock()
-	defer em.world.Unlock()
+	em.world.EngineMu.Lock()
+	defer em.world.EngineMu.Unlock()
 	if em.idle() {
 		em.prevIdleTime = time.Now()
 	}

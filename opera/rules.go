@@ -15,13 +15,10 @@ import (
 )
 
 const (
-	MainNetworkID   uint64 = 0x378
+	MainNetworkID   uint64 = 0xfa
 	TestNetworkID   uint64 = 0xfa2
 	FakeNetworkID   uint64 = 0xfa3
 	DefaultEventGas uint64 = 28000
-	berlinBit              = 1 << 0
-	londonBit              = 1 << 1
-	llrBit                 = 1 << 2
 )
 
 var DefaultVMConfig = vm.Config{
@@ -30,7 +27,9 @@ var DefaultVMConfig = vm.Config{
 	},
 }
 
-type RulesRLP struct {
+// Rules describes opera net.
+// Note keep track of all the non-copiable variables in Copy()
+type Rules struct {
 	Name      string
 	NetworkID uint64
 
@@ -45,13 +44,7 @@ type RulesRLP struct {
 
 	// Economy options
 	Economy EconomyRules
-
-	Upgrades Upgrades `rlp:"-"`
 }
-
-// Rules describes opera net.
-// Note keep track of all the non-copiable variables in Copy()
-type Rules RulesRLP
 
 // GasPowerRules defines gas power rules in the consensus.
 type GasPowerRules struct {
@@ -61,19 +54,12 @@ type GasPowerRules struct {
 	MinStartupGas      uint64
 }
 
-type GasRulesRLPV1 struct {
+type GasRules struct {
 	MaxEventGas  uint64
 	EventGas     uint64
 	ParentGas    uint64
 	ExtraDataGas uint64
-	// Post-LLR fields
-	BlockVotesBaseGas    uint64
-	BlockVoteGas         uint64
-	EpochVoteGas         uint64
-	MisbehaviourProofGas uint64
 }
-
-type GasRules GasRulesRLPV1
 
 type EpochsRules struct {
 	MaxEpochGas      uint64
@@ -111,22 +97,10 @@ type BlocksRules struct {
 	MaxEmptyBlockSkipPeriod inter.Timestamp
 }
 
-type Upgrades struct {
-	Berlin bool
-	London bool
-	Llr    bool
-}
-
 // EvmChainConfig returns ChainConfig for transactions signing and execution
 func (r Rules) EvmChainConfig() *ethparams.ChainConfig {
 	cfg := *ethparams.AllEthashProtocolChanges
 	cfg.ChainID = new(big.Int).SetUint64(r.NetworkID)
-	if !r.Upgrades.Berlin {
-		cfg.BerlinBlock = nil
-	}
-	if !r.Upgrades.London {
-		cfg.LondonBlock = nil
-	}
 	return &cfg
 }
 
@@ -169,11 +143,6 @@ func FakeNetRules() Rules {
 			MaxBlockGas:             20500000,
 			MaxEmptyBlockSkipPeriod: inter.Timestamp(3 * time.Second),
 		},
-		Upgrades: Upgrades{
-			Berlin: true,
-			London: true,
-			Llr:    true,
-		},
 	}
 }
 
@@ -213,14 +182,10 @@ func DefaultEpochsRules() EpochsRules {
 
 func DefaultGasRules() GasRules {
 	return GasRules{
-		MaxEventGas:          10000000 + DefaultEventGas,
-		EventGas:             DefaultEventGas,
-		ParentGas:            2400,
-		ExtraDataGas:         25,
-		BlockVotesBaseGas:    1024,
-		BlockVoteGas:         512,
-		EpochVoteGas:         1536,
-		MisbehaviourProofGas: 71536,
+		MaxEventGas:  10000000 + DefaultEventGas,
+		EventGas:     DefaultEventGas,
+		ParentGas:    2400,
+		ExtraDataGas: 25,
 	}
 }
 

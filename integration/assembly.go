@@ -15,18 +15,12 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/status-im/keycard-go/hexutils"
 
 	"github.com/Fantom-foundation/go-opera/gossip"
 	"github.com/Fantom-foundation/go-opera/opera"
 	"github.com/Fantom-foundation/go-opera/opera/genesisstore"
 	"github.com/Fantom-foundation/go-opera/utils/adapters/vecmt2dagidx"
 	"github.com/Fantom-foundation/go-opera/vecmt"
-)
-
-var (
-	FlushIDKey = hexutils.HexToBytes("0068c2927bf842c3e9e2f1364494a33a752db334b9a819534bc9f17d2c3b4e5970008ff519d35a86f29fcaa5aae706b75dee871f65f174fcea1747f2915fc92158f6bfbf5eb79f65d16225738594bffb0c")
 )
 
 // GenesisMismatchError is raised when trying to overwrite an existing
@@ -41,12 +35,11 @@ func (e *GenesisMismatchError) Error() string {
 }
 
 type Configs struct {
-	Opera          gossip.Config
-	OperaStore     gossip.StoreConfig
-	Lachesis       abft.Config
-	LachesisStore  abft.StoreConfig
-	VectorClock    vecmt.IndexConfig
-	AllowedGenesis map[uint64]hash.Hash
+	Opera         gossip.Config
+	OperaStore    gossip.StoreConfig
+	Lachesis      abft.Config
+	LachesisStore abft.StoreConfig
+	VectorClock   vecmt.IndexConfig
 }
 
 type InputGenesis struct {
@@ -89,6 +82,10 @@ func rawApplyGenesis(gdb *gossip.Store, cdb *abft.Store, g opera.Genesis, cfg Co
 func rawMakeEngine(gdb *gossip.Store, cdb *abft.Store, g opera.Genesis, cfg Configs, applyGenesis bool) (*abft.Lachesis, *vecmt.Index, gossip.BlockProc, error) {
 	blockProc := gossip.DefaultBlockProc(g)
 
+	err := gdb.Migrate()
+	if err != nil {
+		return nil, nil, blockProc, fmt.Errorf("failed to migrate Gossip DB: %v", err)
+	}
 	if applyGenesis {
 		_, err := gdb.ApplyGenesis(blockProc, g)
 		if err != nil {
@@ -124,22 +121,18 @@ func makeFlushableProducer(rawProducer kvdb.IterableDBProducer) (*flushable.Sync
 	return dbs, nil
 }
 
-func applyGenesis(rawProducer kvdb.DBProducer, inputGenesis InputGenesis, cfg Configs) error {
+func applyGenesis(rawProducer kvdb.DBProducer, readGenesisStore func(*genesisstore.Store) error, cfg Configs) error {
 	rawDbs := &DummyFlushableProducer{rawProducer}
 	gdb, cdb, genesisStore := getStores(rawDbs, cfg)
 	defer gdb.Close()
 	defer cdb.Close()
 	defer genesisStore.Close()
 	log.Info("Decoding genesis file")
-	err := inputGenesis.Read(genesisStore)
+	err := readGenesisStore(genesisStore)
 	if err != nil {
 		return err
 	}
 	log.Info("Applying genesis state")
-	networkID := genesisStore.GetRules().NetworkID
-	if want, ok := cfg.AllowedGenesis[networkID]; ok && want != inputGenesis.Hash {
-		return fmt.Errorf("genesis hash is not allowed for the network %d: want %s, got %s", networkID, want.String(), inputGenesis.Hash.String())
-	}
 	err = rawApplyGenesis(gdb, cdb, genesisStore.GetGenesis(), cfg)
 	if err != nil {
 		return err
@@ -164,7 +157,7 @@ func makeEngine(rawProducer kvdb.IterableDBProducer, inputGenesis InputGenesis, 
 			return nil, nil, nil, nil, nil, gossip.BlockProc{}, fmt.Errorf("failed to close existing databases: %v", err)
 		}
 
-		err = applyGenesis(rawProducer, inputGenesis, cfg)
+		err = applyGenesis(rawProducer, inputGenesis.Read, cfg)
 		if err != nil {
 			return nil, nil, nil, nil, nil, gossip.BlockProc{}, fmt.Errorf("failed to apply genesis state: %v", err)
 		}
@@ -175,14 +168,7 @@ func makeEngine(rawProducer kvdb.IterableDBProducer, inputGenesis InputGenesis, 
 			return nil, nil, nil, nil, nil, gossip.BlockProc{}, err
 		}
 	}
-
-	var db kvdb.FlushableDBProducer
-	if metrics.Enabled {
-		db = WrapDatabaseWithMetrics(dbs)
-	} else {
-		db = dbs
-	}
-	gdb, cdb, genesisStore := getStores(db, cfg)
+	gdb, cdb, genesisStore := getStores(dbs, cfg)
 	defer func() {
 		if err != nil {
 			gdb.Close()
@@ -207,11 +193,6 @@ func makeEngine(rawProducer kvdb.IterableDBProducer, inputGenesis InputGenesis, 
 	engine, vecClock, blockProc, err := rawMakeEngine(gdb, cdb, genesisStore.GetGenesis(), cfg, false)
 	if err != nil {
 		err = fmt.Errorf("failed to make engine: %v", err)
-		return nil, nil, nil, nil, nil, gossip.BlockProc{}, err
-	}
-
-	if *gdb.GetGenesisHash() != inputGenesis.Hash {
-		err = fmt.Errorf("genesis hash mismatch with genesis file header: %s != %s", gdb.GetGenesisHash().String(), inputGenesis.Hash.String())
 		return nil, nil, nil, nil, nil, gossip.BlockProc{}, err
 	}
 

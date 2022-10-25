@@ -51,10 +51,6 @@ func (s *Store) GetEventPayload(id hash.Event) *inter.EventPayload {
 	key := id.Bytes()
 	w, _ := s.rlp.Get(s.table.Events, key, &inter.EventPayload{}).(*inter.EventPayload)
 
-	if w != nil {
-		fixEventTxHashes(w)
-	}
-
 	// Put event to LRU cache.
 	if w != nil {
 		s.cache.Events.Add(id, w, uint(w.Size()))
@@ -77,8 +73,6 @@ func (s *Store) GetEvent(id hash.Event) *inter.Event {
 	if w == nil {
 		return nil
 	}
-	fixEventTxHashes(w)
-
 	eh := w.Event
 
 	// Put event to LRU cache.
@@ -191,11 +185,10 @@ func (s *Store) SetHighestLamport(lamport idx.Lamport) {
 
 func (s *Store) FlushHighestLamport() {
 	cached, ok := s.getCachedHighestLamport()
-	if !ok {
-		return
-	}
-	err := s.table.HighestLamport.Put([]byte("k"), cached.Bytes())
-	if err != nil {
-		s.Log.Crit("Failed to put key-value", "err", err)
+	if ok {
+		err := s.table.HighestLamport.Put([]byte("k"), cached.Bytes())
+		if err != nil {
+			s.Log.Crit("Failed to put key-value", "err", err)
+		}
 	}
 }

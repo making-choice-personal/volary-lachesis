@@ -196,7 +196,7 @@ func (*HandlerT) Stacks() string {
 	return buf.String()
 }
 
-// FreeOSMemory forces a garbage collection.
+// FreeOSMemory returns unused memory to the OS.
 func (*HandlerT) FreeOSMemory() {
 	debug.FreeOSMemory()
 }

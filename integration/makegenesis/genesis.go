@@ -30,7 +30,7 @@ var (
 )
 
 // FakeKey gets n-th fake private key.
-func FakeKey(n idx.ValidatorID) *ecdsa.PrivateKey {
+func FakeKey(n int) *ecdsa.PrivateKey {
 	reader := rand.New(rand.NewSource(int64(n)))
 
 	key, err := ecdsa.GenerateKey(crypto.S256(), reader)
@@ -41,7 +41,7 @@ func FakeKey(n idx.ValidatorID) *ecdsa.PrivateKey {
 	return key
 }
 
-func FakeGenesisStore(firstEpoch idx.Epoch, num idx.Validator, balance, stake *big.Int) *genesisstore.Store {
+func FakeGenesisStore(num int, balance, stake *big.Int) *genesisstore.Store {
 	genStore := genesisstore.NewMemStore()
 	genStore.SetRules(opera.FakeNetRules())
 
@@ -73,7 +73,7 @@ func FakeGenesisStore(firstEpoch idx.Epoch, num idx.Validator, balance, stake *b
 
 	genStore.SetMetadata(genesisstore.Metadata{
 		Validators:    validators,
-		FirstEpoch:    firstEpoch,
+		FirstEpoch:    2,
 		Time:          FakeGenesisTime,
 		PrevEpochTime: FakeGenesisTime - inter.Timestamp(time.Hour),
 		ExtraData:     []byte("fake"),
@@ -122,10 +122,10 @@ func FakeGenesisStore(firstEpoch idx.Epoch, num idx.Validator, balance, stake *b
 	return genStore
 }
 
-func GetFakeValidators(num idx.Validator) gpos.Validators {
+func GetFakeValidators(num int) gpos.Validators {
 	validators := make(gpos.Validators, 0, num)
 
-	for i := idx.ValidatorID(1); i <= idx.ValidatorID(num); i++ {
+	for i := 1; i <= num; i++ {
 		key := FakeKey(i)
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		pubkeyraw := crypto.FromECDSAPub(&key.PublicKey)

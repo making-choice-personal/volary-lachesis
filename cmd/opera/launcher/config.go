@@ -6,30 +6,25 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
 
 	"github.com/Fantom-foundation/lachesis-base/abft"
-	"github.com/Fantom-foundation/lachesis-base/hash"
-	"github.com/Fantom-foundation/lachesis-base/utils/cachescale"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/naoina/toml"
 	"gopkg.in/urfave/cli.v1"
 
 	"github.com/Fantom-foundation/go-opera/evmcore"
 	"github.com/Fantom-foundation/go-opera/gossip"
-	"github.com/Fantom-foundation/go-opera/gossip/emitter"
 	"github.com/Fantom-foundation/go-opera/gossip/gasprice"
 	"github.com/Fantom-foundation/go-opera/integration"
 	"github.com/Fantom-foundation/go-opera/integration/makegenesis"
-	"github.com/Fantom-foundation/go-opera/opera"
 	"github.com/Fantom-foundation/go-opera/opera/genesisstore"
 	futils "github.com/Fantom-foundation/go-opera/utils"
 	"github.com/Fantom-foundation/go-opera/vecmt"
@@ -67,45 +62,11 @@ var (
 		Value: utils.DirectoryString(DefaultDataDir()),
 	}
 
-	CacheFlag = cli.IntFlag{
-		Name:  "cache",
-		Usage: "Megabytes of memory allocated to internal caching",
-		Value: DefaultCacheSize,
-	}
 	// GenesisFlag specifies network genesis configuration
 	GenesisFlag = cli.StringFlag{
 		Name:  "genesis",
 		Usage: "'path to genesis file' - sets the network genesis configuration.",
 	}
-
-	RPCGlobalGasCapFlag = cli.Uint64Flag{
-		Name:  "rpc.gascap",
-		Usage: "Sets a cap on gas that can be used in vlry_call/estimateGas (0=infinite)",
-		Value: gossip.DefaultConfig(cachescale.Identity).RPCGasCap,
-	}
-	RPCGlobalTxFeeCapFlag = cli.Float64Flag{
-		Name:  "rpc.txfeecap",
-		Usage: "Sets a cap on transaction fee (in VLRY) that can be sent via the RPC APIs (0 = no cap)",
-		Value: gossip.DefaultConfig(cachescale.Identity).RPCTxFeeCap,
-	}
-
-	SyncModeFlag = cli.StringFlag{
-		Name:  "syncmode",
-		Usage: `Blockchain sync mode ("full" or "snap")`,
-		Value: "full",
-	}
-
-	AllowedOperaGenesisHashes = map[uint64]hash.Hash{
-		opera.MainNetworkID: hash.HexToHash("0xbf8aa49ec51055586719a40d318fe95922c9fad5a146083983702030781da489"),
-		opera.TestNetworkID: hash.HexToHash("0xc4a5fc96e575a16a9a0c7349d44dc4d0f602a54e0a8543360c2fee4c3937b49e"),
-	}
-)
-
-const (
-	// DefaultCacheSize is calculated as memory consumption in a worst case scenario with default configuration
-	// Average memory consumption might be 3-5 times lower than the maximum
-	DefaultCacheSize  = 3600
-	ConstantCacheSize = 1024
 )
 
 // These settings ensure that TOML keys use the same names as Go struct fields.
@@ -124,23 +85,19 @@ var tomlSettings = toml.Config{
 type config struct {
 	Node          node.Config
 	Opera         gossip.Config
-	Emitter       emitter.Config
-	TxPool        evmcore.TxPoolConfig
 	OperaStore    gossip.StoreConfig
 	Lachesis      abft.Config
 	LachesisStore abft.StoreConfig
 	VectorClock   vecmt.IndexConfig
-	cachescale    cachescale.Func
 }
 
 func (c *config) AppConfigs() integration.Configs {
 	return integration.Configs{
-		Opera:          c.Opera,
-		OperaStore:     c.OperaStore,
-		Lachesis:       c.Lachesis,
-		LachesisStore:  c.LachesisStore,
-		VectorClock:    c.VectorClock,
-		AllowedGenesis: AllowedOperaGenesisHashes,
+		Opera:         c.Opera,
+		OperaStore:    c.OperaStore,
+		Lachesis:      c.Lachesis,
+		LachesisStore: c.LachesisStore,
+		VectorClock:   c.VectorClock,
 	}
 }
 
@@ -173,7 +130,7 @@ func getOperaGenesis(ctx *cli.Context) integration.InputGenesis {
 		if err != nil {
 			log.Crit("Invalid flag", "flag", FakeNetFlag.Name, "err", err)
 		}
-		fakeGenesisStore := makegenesis.FakeGenesisStore(2, num, futils.ToVlry(1000000000), futils.ToVlry(5000000))
+		fakeGenesisStore := makegenesis.FakeGenesisStore(num, futils.ToFtm(1000000000), futils.ToFtm(5000000))
 		genesis = integration.InputGenesis{
 			Hash: fakeGenesisStore.Hash(),
 			Read: func(store *genesisstore.Store) error {
@@ -212,10 +169,9 @@ func getOperaGenesis(ctx *cli.Context) integration.InputGenesis {
 }
 
 func setBootnodes(ctx *cli.Context, urls []string, cfg *node.Config) {
-	cfg.P2P.BootstrapNodesV5 = []*enode.Node{}
 	for _, url := range urls {
 		if url != "" {
-			node, err := enode.Parse(enode.ValidSchemes, url)
+			node, err := discv5.ParseNode(url)
 			if err != nil {
 				log.Error("Bootstrap URL invalid", "enode", url, "err", err)
 				continue
@@ -223,7 +179,6 @@ func setBootnodes(ctx *cli.Context, urls []string, cfg *node.Config) {
 			cfg.P2P.BootstrapNodesV5 = append(cfg.P2P.BootstrapNodesV5, node)
 		}
 	}
-	cfg.P2P.BootstrapNodes = cfg.P2P.BootstrapNodesV5
 }
 
 func setDataDir(ctx *cli.Context, cfg *node.Config) {
@@ -238,10 +193,27 @@ func setDataDir(ctx *cli.Context, cfg *node.Config) {
 			log.Crit("Invalid flag", "flag", FakeNetFlag.Name, "err", err)
 		}
 		cfg.DataDir = filepath.Join(defaultDataDir, fmt.Sprintf("fakenet-%d", num))
+	case ctx.GlobalBool(utils.LegacyTestnetFlag.Name):
+		cfg.DataDir = filepath.Join(defaultDataDir, "testnet")
+	default:
+		cfg.DataDir = defaultDataDir
 	}
 }
 
-func setGPO(ctx *cli.Context, cfg *gasprice.Config) {}
+func setGPO(ctx *cli.Context, cfg *gasprice.Config) {
+	if ctx.GlobalIsSet(utils.LegacyGpoBlocksFlag.Name) {
+		cfg.Blocks = ctx.GlobalInt(utils.LegacyGpoBlocksFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.GpoBlocksFlag.Name) {
+		cfg.Blocks = ctx.GlobalInt(utils.GpoBlocksFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.LegacyGpoPercentileFlag.Name) {
+		cfg.Percentile = ctx.GlobalInt(utils.LegacyGpoPercentileFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.GpoPercentileFlag.Name) {
+		cfg.Percentile = ctx.GlobalInt(utils.GpoPercentileFlag.Name)
+	}
+}
 
 func setTxPool(ctx *cli.Context, cfg *evmcore.TxPoolConfig) {
 	if ctx.GlobalIsSet(utils.TxPoolLocalsFlag.Name) {
@@ -289,77 +261,73 @@ func setTxPool(ctx *cli.Context, cfg *evmcore.TxPoolConfig) {
 func gossipConfigWithFlags(ctx *cli.Context, src gossip.Config) (gossip.Config, error) {
 	cfg := src
 
+	// Avoid conflicting network flags
+	utils.CheckExclusive(ctx, FakeNetFlag, utils.DeveloperFlag, utils.LegacyTestnetFlag)
+	utils.CheckExclusive(ctx, FakeNetFlag, utils.DeveloperFlag, utils.ExternalSignerFlag) // Can't use both ephemeral unlocked and external signer
+
 	setGPO(ctx, &cfg.GPO)
+	setTxPool(ctx, &cfg.TxPool)
 
-	if ctx.GlobalIsSet(RPCGlobalGasCapFlag.Name) {
-		cfg.RPCGasCap = ctx.GlobalUint64(RPCGlobalGasCapFlag.Name)
-	}
-	if ctx.GlobalIsSet(RPCGlobalTxFeeCapFlag.Name) {
-		cfg.RPCTxFeeCap = ctx.GlobalFloat64(RPCGlobalTxFeeCapFlag.Name)
-	}
-	if ctx.GlobalIsSet(SyncModeFlag.Name) {
-		if syncmode := ctx.GlobalString(SyncModeFlag.Name); syncmode != "full" && syncmode != "snap" {
-			utils.Fatalf("--%s must be either 'full' or 'snap'", SyncModeFlag.Name)
-		}
-		cfg.AllowSnapsync = ctx.GlobalString(SyncModeFlag.Name) == "snap"
+	// TODO cache config
+	//if ctx.GlobalIsSet(utils.CacheFlag.Name) || ctx.GlobalIsSet(utils.CacheDatabaseFlag.Name) {
+	//	cfg.DatabaseCache = ctx.GlobalInt(utils.CacheFlag.Name) * ctx.GlobalInt(utils.CacheDatabaseFlag.Name) / 100
+	//}
+	//if ctx.GlobalIsSet(utils.CacheFlag.Name) || ctx.GlobalIsSet(CacheTrieFlag.Name) {
+	//	cfg.TrieCleanCache = ctx.GlobalInt(utils.CacheFlag.Name) * ctx.GlobalInt(CacheTrieFlag.Name) / 100
+	//}
+	//if ctx.GlobalIsSet(utils.CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
+	//	cfg.TrieDirtyCache = ctx.GlobalInt(utils.CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
+	//}
+
+	if ctx.GlobalIsSet(utils.VMEnableDebugFlag.Name) {
+		cfg.EnablePreimageRecording = ctx.GlobalBool(utils.VMEnableDebugFlag.Name)
 	}
 
-	return cfg, nil
-}
-
-func gossipStoreConfigWithFlags(ctx *cli.Context, src gossip.StoreConfig) (gossip.StoreConfig, error) {
-	cfg := src
-	if ctx.GlobalIsSet(utils.GCModeFlag.Name) {
-		if gcmode := ctx.GlobalString(utils.GCModeFlag.Name); gcmode != "full" && gcmode != "archive" {
-			utils.Fatalf("--%s must be either 'full' or 'archive'", utils.GCModeFlag.Name)
-		}
-		cfg.EVM.Cache.TrieDirtyDisabled = ctx.GlobalString(utils.GCModeFlag.Name) == "archive"
+	if ctx.GlobalIsSet(utils.EWASMInterpreterFlag.Name) {
+		cfg.EWASMInterpreter = ctx.GlobalString(utils.EWASMInterpreterFlag.Name)
 	}
+
+	if ctx.GlobalIsSet(utils.EVMInterpreterFlag.Name) {
+		cfg.EVMInterpreter = ctx.GlobalString(utils.EVMInterpreterFlag.Name)
+	}
+	if ctx.GlobalIsSet(utils.RPCGlobalGasCap.Name) {
+		cfg.RPCGasCap = ctx.GlobalUint64(utils.RPCGlobalGasCap.Name)
+	}
+	if ctx.GlobalIsSet(utils.RPCGlobalTxFeeCap.Name) {
+		cfg.RPCTxFeeCap = ctx.GlobalFloat64(utils.RPCGlobalTxFeeCap.Name)
+	}
+
+	err := setValidator(ctx, &cfg.Emitter)
+	if err != nil {
+		return cfg, err
+	}
+
 	return cfg, nil
 }
 
 func nodeConfigWithFlags(ctx *cli.Context, cfg node.Config) node.Config {
 	utils.SetNodeConfig(ctx, &cfg)
 
+	if !ctx.GlobalIsSet(FakeNetFlag.Name) {
+		setBootnodes(ctx, Bootnodes, &cfg)
+	}
 	setDataDir(ctx, &cfg)
 	return cfg
 }
 
-func cacheScaler(ctx *cli.Context) cachescale.Func {
-	if !ctx.GlobalIsSet(CacheFlag.Name) {
-		return cachescale.Identity
-	}
-	targetCache := ctx.GlobalInt(CacheFlag.Name)
-	baseSize := DefaultCacheSize
-	if targetCache < baseSize {
-		log.Crit("Invalid flag", "flag", CacheFlag.Name, "err", fmt.Sprintf("minimum cache size is %d MB", baseSize))
-	}
-	return cachescale.Ratio{
-		Base:   uint64(baseSize - ConstantCacheSize),
-		Target: uint64(targetCache - ConstantCacheSize),
-	}
-}
-
 func mayMakeAllConfigs(ctx *cli.Context) (*config, error) {
 	// Defaults (low priority)
-	cacheRatio := cacheScaler(ctx)
 	cfg := config{
 		Node:          defaultNodeConfig(),
-		Opera:         gossip.DefaultConfig(cacheRatio),
-		Emitter:       emitter.DefaultConfig(),
-		TxPool:        evmcore.DefaultTxPoolConfig,
-		OperaStore:    gossip.DefaultStoreConfig(cacheRatio),
+		Opera:         gossip.DefaultConfig(),
+		OperaStore:    gossip.DefaultStoreConfig(),
 		Lachesis:      abft.DefaultConfig(),
-		LachesisStore: abft.DefaultStoreConfig(cacheRatio),
-		VectorClock:   vecmt.DefaultConfig(cacheRatio),
-		cachescale:    cacheRatio,
+		LachesisStore: abft.DefaultStoreConfig(),
+		VectorClock:   vecmt.DefaultConfig(),
 	}
-
 	if ctx.GlobalIsSet(FakeNetFlag.Name) {
 		_, num, _ := parseFakeGen(ctx.GlobalString(FakeNetFlag.Name))
-		cfg.Emitter = emitter.FakeConfig(num)
-	} else {
-		setBootnodes(ctx, Bootnodes, &cfg.Node)
+		cfg.Opera = gossip.FakeConfig(num)
 	}
 
 	// Load config file (medium priority)
@@ -375,20 +343,7 @@ func mayMakeAllConfigs(ctx *cli.Context) (*config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg.OperaStore, err = gossipStoreConfigWithFlags(ctx, cfg.OperaStore)
-	if err != nil {
-		return nil, err
-	}
 	cfg.Node = nodeConfigWithFlags(ctx, cfg.Node)
-
-	err = setValidator(ctx, &cfg.Emitter)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.Emitter.Validator.ID != 0 && len(cfg.Emitter.PrevEmittedEventFile.Path) == 0 {
-		cfg.Emitter.PrevEmittedEventFile.Path = cfg.Node.ResolvePath(path.Join("emitter", fmt.Sprintf("last-%d", cfg.Emitter.Validator.ID)))
-	}
-	setTxPool(ctx, &cfg.TxPool)
 
 	if err := cfg.Opera.Validate(); err != nil {
 		return nil, err
@@ -409,8 +364,8 @@ func defaultNodeConfig() node.Config {
 	cfg := NodeDefaultConfig
 	cfg.Name = clientIdentifier
 	cfg.Version = params.VersionWithCommit(gitCommit, gitDate)
-	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "vlry", "dag", "abft", "web3")
-	cfg.WSModules = append(cfg.WSModules, "eth", "vlry", "dag", "abft", "web3")
+	cfg.HTTPModules = append(cfg.HTTPModules, "eth", "ftm", "dag", "sfc", "abft", "web3")
+	cfg.WSModules = append(cfg.WSModules, "eth", "ftm", "dag", "sfc", "abft", "web3")
 	cfg.IPCPath = "opera.ipc"
 	cfg.DataDir = DefaultDataDir()
 	return cfg

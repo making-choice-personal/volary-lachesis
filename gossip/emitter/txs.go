@@ -11,7 +11,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 
-	"github.com/Fantom-foundation/go-opera/eventcheck/epochcheck"
 	"github.com/Fantom-foundation/go-opera/eventcheck/gaspowercheck"
 	"github.com/Fantom-foundation/go-opera/inter"
 	"github.com/Fantom-foundation/go-opera/utils"
@@ -32,7 +31,7 @@ func max64(a, b uint64) uint64 {
 }
 
 func (em *Emitter) maxGasPowerToUse(e *inter.MutableEventPayload) uint64 {
-	rules := em.world.GetRules()
+	rules := em.world.Store.GetRules()
 	maxGasToUse := rules.Economy.Gas.MaxEventGas
 	if maxGasToUse > e.GasPowerLeft().Min() {
 		maxGasToUse = e.GasPowerLeft().Min()
@@ -150,18 +149,29 @@ func (em *Emitter) isMyTxTurn(txHash common.Hash, sender common.Address, account
 	return validators.GetID(idx.Validator(rounds[roundIndex])) == me
 }
 
-func (em *Emitter) addTxs(e *inter.MutableEventPayload, sorted *types.TransactionsByPriceAndNonce) {
+func (em *Emitter) addTxs(e *inter.MutableEventPayload, poolTxs map[common.Address]types.Transactions) {
+	if len(poolTxs) == 0 {
+		return
+	}
+
 	maxGasUsed := em.maxGasPowerToUse(e)
 	if maxGasUsed <= e.GasPowerUsed() {
 		return
 	}
 
 	// sort transactions by price and nonce
-	rules := em.world.GetRules()
+	sorted := types.NewTransactionsByPriceAndNonce(em.world.TxSigner, poolTxs)
+
+	senderTxs := make(map[common.Address]int)
 	for tx := sorted.Peek(); tx != nil; tx = sorted.Peek() {
+		// check we don't originate too many txs from the same sender
 		sender, _ := types.Sender(em.world.TxSigner, tx)
-		// check transaction epoch rules
-		if epochcheck.CheckTxs(types.Transactions{tx}, rules) != nil {
+		if senderTxs[sender] >= em.config.MaxTxsPerAddress {
+			sorted.Pop()
+			continue
+		}
+		// check transaction is not underpriced
+		if tx.GasPrice().Cmp(em.world.Store.GetRules().Economy.MinGasPrice) < 0 {
 			sorted.Pop()
 			continue
 		}
@@ -185,7 +195,7 @@ func (em *Emitter) addTxs(e *inter.MutableEventPayload, sorted *types.Transactio
 			continue
 		}
 		// check transaction is not outdated
-		if !em.world.TxPool.Has(tx.Hash()) {
+		if !em.world.Txpool.Has(tx.Hash()) {
 			sorted.Pop()
 			continue
 		}
@@ -193,6 +203,7 @@ func (em *Emitter) addTxs(e *inter.MutableEventPayload, sorted *types.Transactio
 		e.SetGasPowerUsed(e.GasPowerUsed() + tx.Gas())
 		e.SetGasPowerLeft(e.GasPowerLeft().Sub(tx.Gas()))
 		e.SetTxs(append(e.Txs(), tx))
+		senderTxs[sender]++
 		sorted.Shift()
 	}
 }

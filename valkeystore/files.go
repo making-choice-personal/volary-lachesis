@@ -52,7 +52,7 @@ func (f *FileKeystore) PathOf(pubkey validatorpk.PubKey) string {
 
 func fileExists(filename string) bool {
 	info, err := os.Stat(filename)
-	if err != nil {
+	if os.IsNotExist(err) {
 		return false
 	}
 	return !info.IsDir()

@@ -5,29 +5,29 @@ import (
 	"github.com/Fantom-foundation/go-opera/utils/fast"
 )
 
-func MarshalBinaryAdapter(marshalCser func(*Writer) error) ([]byte, error) {
-	w := NewWriter()
-	err := marshalCser(w)
+func MarshalBinaryAdapter(marshalCser func(writer *Writer) error) ([]byte, error) {
+	bodyBits := &bits.Array{Bytes: make([]byte, 0, 32)}
+	bodyBytes := fast.NewWriter(make([]byte, 0, 200))
+	bodyWriter := &Writer{
+		BitsW:  bits.NewWriter(bodyBits),
+		BytesW: bodyBytes,
+	}
+	err := marshalCser(bodyWriter)
 	if err != nil {
 		return nil, err
 	}
 
-	return binaryFromCSER(w.BitsW.Array, w.BytesW.Bytes())
-}
-
-// binaryFromCSER packs body bytes and bits into raw
-func binaryFromCSER(bbits *bits.Array, bbytes []byte) (raw []byte, err error) {
-	bodyBytes := fast.NewWriter(bbytes)
-	bodyBytes.Write(bbits.Bytes)
+	bodyBytes.Write(bodyBits.Bytes)
 	// write bits size
 	sizeWriter := fast.NewWriter(make([]byte, 0, 4))
-	writeUint64Compact(sizeWriter, uint64(len(bbits.Bytes)))
+	writeUint64Compact(sizeWriter, uint64(len(bodyBits.Bytes)))
 	bodyBytes.Write(reversed(sizeWriter.Bytes()))
+
 	return bodyBytes.Bytes(), nil
 }
 
-// binaryToCSER unpacks raw on body bytes and bits
-func binaryToCSER(raw []byte) (bbits *bits.Array, bbytes []byte, err error) {
+// UnmarshalBinary implements encoding.BinaryUnmarshaler interface.
+func BinaryToCSER(raw []byte) (bodyBits *bits.Array, bodyBytes []byte, err error) {
 	// read bitsArray size
 	bitsSizeBuf := reversed(tail(raw, 9))
 	bitsSizeReader := fast.NewReader(bitsSizeBuf)
@@ -35,30 +35,29 @@ func binaryToCSER(raw []byte) (bbits *bits.Array, bbytes []byte, err error) {
 	raw = raw[:len(raw)-bitsSizeReader.Position()]
 
 	if uint64(len(raw)) < bitsSize {
-		err = ErrMalformedEncoding
-		return
+		return nil, nil, ErrMalformedEncoding
 	}
 
-	bbits = &bits.Array{Bytes: raw[uint64(len(raw))-bitsSize:]}
-	bbytes = raw[:uint64(len(raw))-bitsSize]
-	return
+	bodyBits = &bits.Array{Bytes: raw[uint64(len(raw))-bitsSize:]}
+	bodyBytes = raw[:uint64(len(raw))-bitsSize]
+	return bodyBits, bodyBytes, nil
 }
 
-func UnmarshalBinaryAdapter(raw []byte, unmarshalCser func(reader *Reader) error) (err error) {
+func UnmmrshalBinaryAdapter(raw []byte, unmarshalCser func(reader *Reader) error) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = ErrMalformedEncoding
 		}
 	}()
-
-	bbits, bbytes, err := binaryToCSER(raw)
+	bodyBits, bodyBytes_, err := BinaryToCSER(raw)
 	if err != nil {
 		return err
 	}
+	bodyBytes := fast.NewReader(bodyBytes_)
 
 	bodyReader := &Reader{
-		BitsR:  bits.NewReader(bbits),
-		BytesR: fast.NewReader(bbytes),
+		BitsR:  bits.NewReader(bodyBits),
+		BytesR: bodyBytes,
 	}
 	err = unmarshalCser(bodyReader)
 	if err != nil {

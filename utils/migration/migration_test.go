@@ -45,7 +45,7 @@ func TestMigrations(t *testing.T) {
 			},
 		)
 
-		err := afterBad.Exec(curVer, flush)
+		err := afterBad.Exec(curVer)
 		require.Error(err, "Success after a migration error")
 
 		lastID := curVer.GetID()
@@ -73,7 +73,7 @@ func TestMigrations(t *testing.T) {
 			},
 		)
 
-		err = fixed.Exec(curVer, flush)
+		err = fixed.Exec(curVer)
 		require.NoError(err, "Error when run migration manager")
 
 		require.Equal(1, testData["migration1"], "Bad value after run migration1")
@@ -93,12 +93,8 @@ func TestMigrations(t *testing.T) {
 				},
 			)
 
-		err := nonnative.Exec(curVer, flush)
+		err := nonnative.Exec(curVer)
 		require.NotEqual(999, testData["migration1"], "nonnative migration is applied")
 		require.Error(err)
 	})
-}
-
-func flush() error {
-	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Fantom-foundation/lachesis-base/gossip/dagstream"
 	"github.com/Fantom-foundation/lachesis-base/hash"
 	"github.com/Fantom-foundation/lachesis-base/inter/dag"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
@@ -13,29 +14,36 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/protocols/snap"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/Fantom-foundation/go-opera/gossip/protocols/blockrecords/brstream"
-	"github.com/Fantom-foundation/go-opera/gossip/protocols/blockvotes/bvstream"
-	"github.com/Fantom-foundation/go-opera/gossip/protocols/dag/dagstream"
-	"github.com/Fantom-foundation/go-opera/gossip/protocols/epochpacks/epstream"
 	"github.com/Fantom-foundation/go-opera/inter"
 )
 
 var (
-	errNotRegistered = errors.New("peer is not registered")
+	errClosed            = errors.New("peer set is closed")
+	errAlreadyRegistered = errors.New("peer is already registered")
+	errNotRegistered     = errors.New("peer is not registered")
 )
 
 const (
+	maxKnownTxs    = 24576 // Maximum transactions hashes to keep in the known list (prevent DOS)
+	maxKnownEvents = 24576 // Maximum event hashes to keep in the known list (prevent DOS)
+
+	// maxQueuedItems is the maximum number of items to queue up before
+	// dropping broadcasts. This is a sensitive number as a transaction list might
+	// contain a single transaction, or thousands.
+	maxQueuedItems = 4096
+	maxQueuedSize  = protocolMaxMsgSize + 1024
+
 	handshakeTimeout = 5 * time.Second
 )
 
 // PeerInfo represents a short summary of the sub-protocol metadata known
 // about a connected peer.
 type PeerInfo struct {
-	Version     uint      `json:"version"` // protocol version negotiated
+	Version     int       `json:"version"` // protocol version negotiated
 	Epoch       idx.Epoch `json:"epoch"`
 	NumOfBlocks idx.Block `json:"blocks"`
 }
@@ -48,12 +56,10 @@ type broadcastItem struct {
 type peer struct {
 	id string
 
-	cfg PeerCacheConfig
-
 	*p2p.Peer
 	rw p2p.MsgReadWriter
 
-	version uint // Protocol version negotiated
+	version int // Protocol version negotiated
 
 	knownTxs            mapset.Set         // Set of transaction hashes known to be known by this peer
 	knownEvents         mapset.Set         // Set of event hashes known to be known by this peer
@@ -63,9 +69,7 @@ type peer struct {
 
 	progress PeerProgress
 
-	snapExt  *snapPeer     // Satellite `snap` connection
-	syncDrop *time.Timer   // Connection dropper if `eth` sync progress isn't validated in time
-	snapWait chan struct{} // Notification channel for snap connections
+	poolEntry *poolEntry
 
 	sync.RWMutex
 }
@@ -96,23 +100,24 @@ func (a *PeerProgress) Less(b PeerProgress) bool {
 	return a.LastBlockIdx < b.LastBlockIdx
 }
 
-func newPeer(version uint, p *p2p.Peer, rw p2p.MsgReadWriter, cfg PeerCacheConfig) *peer {
-	peer := &peer{
-		cfg:                 cfg,
+func newPeer(version int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
+	warningFn := func(received dag.Metric, processing dag.Metric, releasing dag.Metric) {
+		log.Warn("Peer queue semaphore inconsistency",
+			"receivedNum", received.Num, "receivedSize", received.Size,
+			"processingNum", processing.Num, "processingSize", processing.Size,
+			"releasingNum", releasing.Num, "releasingSize", releasing.Size)
+	}
+	return &peer{
 		Peer:                p,
 		rw:                  rw,
 		version:             version,
-		id:                  p.ID().String(),
+		id:                  fmt.Sprintf("%x", p.ID().Bytes()[:8]),
 		knownTxs:            mapset.NewSet(),
 		knownEvents:         mapset.NewSet(),
-		queue:               make(chan broadcastItem, cfg.MaxQueuedItems),
-		queuedDataSemaphore: datasemaphore.New(dag.Metric{cfg.MaxQueuedItems, cfg.MaxQueuedSize}, getSemaphoreWarningFn("Peers queue")),
+		queue:               make(chan broadcastItem, maxQueuedItems),
+		queuedDataSemaphore: datasemaphore.New(dag.Metric{maxQueuedItems, maxQueuedSize}, warningFn),
 		term:                make(chan struct{}),
 	}
-
-	go peer.broadcast(peer.queue)
-
-	return peer
 }
 
 // broadcast is a write loop that multiplexes event propagations, announcements
@@ -131,8 +136,8 @@ func (p *peer) broadcast(queue chan broadcastItem) {
 	}
 }
 
-// Close signals the broadcast goroutine to terminate.
-func (p *peer) Close() {
+// close signals the broadcast goroutine to terminate.
+func (p *peer) close() {
 	p.queuedDataSemaphore.Terminate()
 	close(p.term)
 }
@@ -150,7 +155,7 @@ func (p *peer) Info() *PeerInfo {
 // never be propagated to this particular peer.
 func (p *peer) MarkEvent(hash hash.Event) {
 	// If we reached the memory allowance, drop a previously known event hash
-	for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+	for p.knownEvents.Cardinality() >= maxKnownEvents {
 		p.knownEvents.Pop()
 	}
 	p.knownEvents.Add(hash)
@@ -160,7 +165,7 @@ func (p *peer) MarkEvent(hash hash.Event) {
 // will never be propagated to this particular peer.
 func (p *peer) MarkTransaction(hash common.Hash) {
 	// If we reached the memory allowance, drop a previously known transaction hash
-	for p.knownTxs.Cardinality() >= p.cfg.MaxKnownTxs {
+	for p.knownTxs.Cardinality() >= maxKnownTxs {
 		p.knownTxs.Pop()
 	}
 	p.knownTxs.Add(hash)
@@ -173,7 +178,7 @@ func (p *peer) SendTransactions(txs types.Transactions) error {
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
-	for p.knownTxs.Cardinality() >= p.cfg.MaxKnownTxs {
+	for p.knownTxs.Cardinality() >= maxKnownTxs {
 		p.knownTxs.Pop()
 	}
 	return p2p.Send(p.rw, EvmTxsMsg, txs)
@@ -186,7 +191,7 @@ func (p *peer) SendTransactionHashes(txids []common.Hash) error {
 	for _, txid := range txids {
 		p.knownTxs.Add(txid)
 	}
-	for p.knownTxs.Cardinality() >= p.cfg.MaxKnownTxs {
+	for p.knownTxs.Cardinality() >= maxKnownTxs {
 		p.knownTxs.Pop()
 	}
 	return p2p.Send(p.rw, NewEvmTxHashesMsg, txids)
@@ -271,7 +276,7 @@ func (p *peer) AsyncSendTransactions(txs types.Transactions, queue chan broadcas
 		for _, tx := range txs {
 			p.knownTxs.Add(tx.Hash())
 		}
-		for p.knownTxs.Cardinality() >= p.cfg.MaxKnownTxs {
+		for p.knownTxs.Cardinality() >= maxKnownTxs {
 			p.knownTxs.Pop()
 		}
 	} else {
@@ -279,7 +284,7 @@ func (p *peer) AsyncSendTransactions(txs types.Transactions, queue chan broadcas
 	}
 }
 
-// AsyncSendTransactionHashes queues list of transactions propagation to a remote
+// AsyncSendTransactions queues list of transactions propagation to a remote
 // peer. If the peer's broadcast queue is full, the transactions are silently dropped.
 func (p *peer) AsyncSendTransactionHashes(txids []common.Hash, queue chan broadcastItem) {
 	if p.asyncSendNonEncodedItem(txids, NewEvmTxHashesMsg, queue) {
@@ -287,7 +292,7 @@ func (p *peer) AsyncSendTransactionHashes(txids []common.Hash, queue chan broadc
 		for _, tx := range txids {
 			p.knownTxs.Add(tx)
 		}
-		for p.knownTxs.Cardinality() >= p.cfg.MaxKnownTxs {
+		for p.knownTxs.Cardinality() >= maxKnownTxs {
 			p.knownTxs.Pop()
 		}
 	} else {
@@ -304,7 +309,7 @@ func (p *peer) EnqueueSendTransactions(txs types.Transactions, queue chan broadc
 	for _, tx := range txs {
 		p.knownTxs.Add(tx.Hash())
 	}
-	for p.knownTxs.Cardinality() >= p.cfg.MaxKnownTxs {
+	for p.knownTxs.Cardinality() >= maxKnownTxs {
 		p.knownTxs.Pop()
 	}
 }
@@ -316,13 +321,13 @@ func (p *peer) SendEventIDs(hashes []hash.Event) error {
 	for _, hash := range hashes {
 		p.knownEvents.Add(hash)
 	}
-	for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+	for p.knownEvents.Cardinality() >= maxKnownEvents {
 		p.knownEvents.Pop()
 	}
 	return p2p.Send(p.rw, NewEventIDsMsg, hashes)
 }
 
-// AsyncSendEventIDs queues the availability of a event for propagation to a
+// AsyncSendNewEventHash queues the availability of a event for propagation to a
 // remote peer. If the peer's broadcast queue is full, the event is silently
 // dropped.
 func (p *peer) AsyncSendEventIDs(ids hash.Events, queue chan broadcastItem) {
@@ -331,7 +336,7 @@ func (p *peer) AsyncSendEventIDs(ids hash.Events, queue chan broadcastItem) {
 		for _, id := range ids {
 			p.knownEvents.Add(id)
 		}
-		for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+		for p.knownEvents.Cardinality() >= maxKnownEvents {
 			p.knownEvents.Pop()
 		}
 	} else {
@@ -344,7 +349,7 @@ func (p *peer) SendEvents(events inter.EventPayloads) error {
 	// Mark all the event hash as known, but ensure we don't overflow our limits
 	for _, event := range events {
 		p.knownEvents.Add(event.ID())
-		for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+		for p.knownEvents.Cardinality() >= maxKnownEvents {
 			p.knownEvents.Pop()
 		}
 	}
@@ -356,7 +361,7 @@ func (p *peer) SendEventsRLP(events []rlp.RawValue, ids []hash.Event) error {
 	// Mark all the event hash as known, but ensure we don't overflow our limits
 	for _, id := range ids {
 		p.knownEvents.Add(id)
-		for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+		for p.knownEvents.Cardinality() >= maxKnownEvents {
 			p.knownEvents.Pop()
 		}
 	}
@@ -371,7 +376,7 @@ func (p *peer) AsyncSendEvents(events inter.EventPayloads, queue chan broadcastI
 		for _, event := range events {
 			p.knownEvents.Add(event.ID())
 		}
-		for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+		for p.knownEvents.Cardinality() >= maxKnownEvents {
 			p.knownEvents.Pop()
 		}
 		return true
@@ -388,7 +393,7 @@ func (p *peer) EnqueueSendEventsRLP(events []rlp.RawValue, ids []hash.Event, que
 	for _, id := range ids {
 		p.knownEvents.Add(id)
 	}
-	for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+	for p.knownEvents.Cardinality() >= maxKnownEvents {
 		p.knownEvents.Pop()
 	}
 }
@@ -433,35 +438,11 @@ func (p *peer) RequestTransactions(txids []common.Hash) error {
 	return nil
 }
 
-func (p *peer) SendBVsStream(r bvstream.Response) error {
-	return p2p.Send(p.rw, BVsStreamResponse, r)
-}
-
-func (p *peer) RequestBVsStream(r bvstream.Request) error {
-	return p2p.Send(p.rw, RequestBVsStream, r)
-}
-
-func (p *peer) SendBRsStream(r brstream.Response) error {
-	return p2p.Send(p.rw, BRsStreamResponse, r)
-}
-
-func (p *peer) RequestBRsStream(r brstream.Request) error {
-	return p2p.Send(p.rw, RequestBRsStream, r)
-}
-
-func (p *peer) SendEPsStream(r epstream.Response) error {
-	return p2p.Send(p.rw, EPsStreamResponse, r)
-}
-
-func (p *peer) RequestEPsStream(r epstream.Request) error {
-	return p2p.Send(p.rw, RequestEPsStream, r)
-}
-
 func (p *peer) SendEventsStream(r dagstream.Response, ids hash.Events) error {
 	// Mark all the event hash as known, but ensure we don't overflow our limits
 	for _, id := range ids {
 		p.knownEvents.Add(id)
-		for p.knownEvents.Cardinality() >= p.cfg.MaxKnownEvents {
+		for p.knownEvents.Cardinality() >= maxKnownEvents {
 			p.knownEvents.Pop()
 		}
 	}
@@ -483,7 +464,7 @@ func (p *peer) Handshake(network uint64, progress PeerProgress, genesis common.H
 		// send both HandshakeMsg and ProgressMsg
 		err := p2p.Send(p.rw, HandshakeMsg, &handshakeData{
 			ProtocolVersion: uint32(p.version),
-			NetworkID:       0, // TODO: set to `network` after all nodes updated to #184
+			NetworkID:       network,
 			Genesis:         genesis,
 		})
 		if err != nil {
@@ -529,19 +510,13 @@ func (p *peer) readStatus(network uint64, handshake *handshakeData, genesis comm
 	if err := msg.Decode(&handshake); err != nil {
 		return errResp(ErrDecode, "msg %v: %v", msg, err)
 	}
-
-	// TODO: rm after all the nodes updated to #184
-	if handshake.NetworkID == 0 {
-		handshake.NetworkID = network
-	}
-
 	if handshake.Genesis != genesis {
 		return errResp(ErrGenesisMismatch, "%x (!= %x)", handshake.Genesis[:8], genesis[:8])
 	}
 	if handshake.NetworkID != network {
 		return errResp(ErrNetworkIDMismatch, "%d (!= %d)", handshake.NetworkID, network)
 	}
-	if uint(handshake.ProtocolVersion) != p.version {
+	if int(handshake.ProtocolVersion) != p.version {
 		return errResp(ErrProtocolVersionMismatch, "%d (!= %d)", handshake.ProtocolVersion, p.version)
 	}
 	return nil
@@ -554,25 +529,138 @@ func (p *peer) String() string {
 	)
 }
 
-// snapPeerInfo represents a short summary of the `snap` sub-protocol metadata known
-// about a connected peer.
-type snapPeerInfo struct {
-	Version uint `json:"version"` // Snapshot protocol version negotiated
+// peerSet represents the collection of active peers currently participating in
+// the sub-protocol.
+type peerSet struct {
+	peers  map[string]*peer
+	lock   sync.RWMutex
+	closed bool
 }
 
-// snapPeer is a wrapper around snap.Peer to maintain a few extra metadata.
-type snapPeer struct {
-	*snap.Peer
-}
-
-// info gathers and returns some `snap` protocol metadata known about a peer.
-func (p *snapPeer) info() *snapPeerInfo {
-	return &snapPeerInfo{
-		Version: p.Version(),
+// newPeerSet creates a new peer set to track the active participants.
+func newPeerSet() *peerSet {
+	return &peerSet{
+		peers: make(map[string]*peer),
 	}
 }
 
-// eligibleForSnap checks eligibility of a peer for a snap protocol. A peer is eligible for a snap if it advertises `snap` sattelite protocol along with `opera` protocol.
-func eligibleForSnap(p *p2p.Peer) bool {
-	return p.RunningCap(ProtocolName, []uint{VLRY63}) && p.RunningCap(snap.ProtocolName, snap.ProtocolVersions)
+// Register injects a new peer into the working set, or returns an error if the
+// peer is already known. If a new peer it registered, its broadcast loop is also
+// started.
+func (ps *peerSet) Register(p *peer) error {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	if ps.closed {
+		return errClosed
+	}
+	if _, ok := ps.peers[p.id]; ok {
+		return errAlreadyRegistered
+	}
+	ps.peers[p.id] = p
+	go p.broadcast(p.queue)
+
+	return nil
+}
+
+// Unregister removes a remote peer from the active set, disabling any further
+// actions to/from that particular entity.
+func (ps *peerSet) Unregister(id string) error {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	p, ok := ps.peers[id]
+	if !ok {
+		return errNotRegistered
+	}
+	delete(ps.peers, id)
+	p.close()
+
+	return nil
+}
+
+// Peer retrieves the registered peer with the given id.
+func (ps *peerSet) Peer(id string) *peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	return ps.peers[id]
+}
+
+// Len returns if the current number of peers in the set.
+func (ps *peerSet) Len() int {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	return len(ps.peers)
+}
+
+// PeersWithoutEvent retrieves a list of peers that do not have a given event in
+// their set of known hashes.
+func (ps *peerSet) PeersWithoutEvent(e hash.Event) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if p.InterestedIn(e) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+func (ps *peerSet) List() []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		list = append(list, p)
+	}
+	return list
+}
+
+// PeersWithoutTx retrieves a list of peers that do not have a given transaction
+// in their set of known hashes.
+func (ps *peerSet) PeersWithoutTx(hash common.Hash) []*peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	list := make([]*peer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		if !p.knownTxs.Contains(hash) {
+			list = append(list, p)
+		}
+	}
+	return list
+}
+
+// BestPeer retrieves the known peer with the currently highest total difficulty.
+func (ps *peerSet) BestPeer() *peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	var (
+		bestPeer     *peer
+		bestProgress PeerProgress
+	)
+	for _, p := range ps.peers {
+		if bestProgress.Less(p.progress) {
+			bestPeer, bestProgress = p, p.progress
+		}
+	}
+	return bestPeer
+}
+
+// Close disconnects all peers.
+// No new peers can be registered after Close has returned.
+func (ps *peerSet) Close() {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	for _, p := range ps.peers {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+	ps.closed = true
 }

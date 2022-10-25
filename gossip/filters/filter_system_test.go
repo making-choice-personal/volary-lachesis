@@ -25,6 +25,7 @@ import (
 
 	"github.com/Fantom-foundation/lachesis-base/kvdb/memorydb"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,7 +36,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
 	"github.com/Fantom-foundation/go-opera/integration/makegenesis"
 	"github.com/Fantom-foundation/go-opera/topicsdb"
 )
@@ -119,24 +119,20 @@ func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash) ([][]*types
 	return logs, nil
 }
 
-func (b *testBackend) SubscribeNewTxsNotify(ch chan<- evmcore.NewTxsNotify) notify.Subscription {
+func (b *testBackend) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) notify.Subscription {
 	return b.txsFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribeLogsNotify(ch chan<- []*types.Log) notify.Subscription {
+func (b *testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) notify.Subscription {
 	return b.logsFeed.Subscribe(ch)
 }
 
-func (b *testBackend) SubscribeNewBlockNotify(ch chan<- evmcore.ChainHeadNotify) notify.Subscription {
+func (b *testBackend) SubscribeNewBlockEvent(ch chan<- evmcore.ChainHeadNotify) notify.Subscription {
 	return b.blocksFeed.Subscribe(ch)
 }
 
 func (b *testBackend) EvmLogIndex() *topicsdb.Index {
 	return b.logIndex
-}
-
-func (b *testBackend) GetTxPosition(txid common.Hash) *evmstore.TxPosition {
-	return nil
 }
 
 // TestBlockSubscription tests if a block subscription returns block hashes for posted chain notify.
@@ -149,9 +145,9 @@ func TestBlockSubscription(t *testing.T) {
 
 	var (
 		backend = newTestBackend()
-		api     = NewPublicFilterAPI(backend, testConfig())
+		api     = NewPublicFilterAPI(backend)
 
-		net         = makegenesis.FakeGenesisStore(2, 5, big.NewInt(0), big.NewInt(1)).GetGenesis()
+		net         = makegenesis.FakeGenesisStore(5, big.NewInt(0), big.NewInt(1)).GetGenesis()
 		statedb, _  = state.New(common.Hash{}, state.NewDatabase(backend.db), nil)
 		genesis     = evmcore.MustApplyGenesis(net, statedb, opt.MiB)
 		chain, _, _ = evmcore.GenerateChain(
@@ -211,7 +207,7 @@ func TestPendingTxFilter(t *testing.T) {
 
 	var (
 		backend = newTestBackend()
-		api     = NewPublicFilterAPI(backend, testConfig())
+		api     = NewPublicFilterAPI(backend)
 
 		transactions = []*types.Transaction{
 			types.NewTransaction(0, common.HexToAddress("0xb794f5ea0ba39494ce83a213fffba74279579268"), new(big.Int), 0, new(big.Int), nil),
@@ -227,7 +223,7 @@ func TestPendingTxFilter(t *testing.T) {
 	fid0 := api.NewPendingTransactionFilter()
 
 	time.Sleep(1 * time.Second)
-	backend.txsFeed.Send(evmcore.NewTxsNotify{Txs: transactions})
+	backend.txsFeed.Send(core.NewTxsEvent{Txs: transactions})
 
 	timeout := time.Now().Add(1 * time.Second)
 	for {
@@ -265,7 +261,7 @@ func TestPendingTxFilter(t *testing.T) {
 func TestLogFilterCreation(t *testing.T) {
 	var (
 		backend = newTestBackend()
-		api     = NewPublicFilterAPI(backend, testConfig())
+		api     = NewPublicFilterAPI(backend)
 
 		testCases = []struct {
 			crit    FilterCriteria
@@ -308,7 +304,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 
 	var (
 		backend = newTestBackend()
-		api     = NewPublicFilterAPI(backend, testConfig())
+		api     = NewPublicFilterAPI(backend)
 	)
 
 	// different situations where log filter creation should fail.
@@ -329,7 +325,7 @@ func TestInvalidLogFilterCreation(t *testing.T) {
 func TestInvalidGetLogsRequest(t *testing.T) {
 	var (
 		backend   = newTestBackend()
-		api       = NewPublicFilterAPI(backend, testConfig())
+		api       = NewPublicFilterAPI(backend)
 		blockHash = common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111")
 	)
 
@@ -353,7 +349,7 @@ func TestLogFilter(t *testing.T) {
 
 	var (
 		backend = newTestBackend()
-		api     = NewPublicFilterAPI(backend, testConfig())
+		api     = NewPublicFilterAPI(backend)
 
 		firstAddr      = common.HexToAddress("0x1111111111111111111111111111111111111111")
 		secondAddr     = common.HexToAddress("0x2222222222222222222222222222222222222222")

@@ -9,8 +9,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-
-	"github.com/Fantom-foundation/go-opera/inter"
 )
 
 // PublicDAGChainAPI provides an API to access the directed acyclic graph chain.
@@ -33,7 +31,7 @@ func (s *PublicDAGChainAPI) GetEvent(ctx context.Context, shortEventID string) (
 	if header == nil {
 		return nil, fmt.Errorf("event %s not found", shortEventID)
 	}
-	return inter.RPCMarshalEvent(header), nil
+	return RPCMarshalEventHeader(header), nil
 }
 
 // GetEventPayload returns Lachesis event by hash or short ID.
@@ -45,7 +43,7 @@ func (s *PublicDAGChainAPI) GetEventPayload(ctx context.Context, shortEventID st
 	if event == nil {
 		return nil, fmt.Errorf("event %s not found", shortEventID)
 	}
-	return inter.RPCMarshalEventPayload(event, inclTx, false)
+	return RPCMarshalEvent(event, inclTx, false)
 }
 
 // GetHeads returns IDs of all the epoch events with no descendants.
@@ -58,7 +56,7 @@ func (s *PublicDAGChainAPI) GetHeads(ctx context.Context, epoch rpc.BlockNumber)
 		return nil, err
 	}
 
-	return inter.EventIDsToHex(res), nil
+	return eventIDsToHex(res), nil
 }
 
 // GetEpochStats returns epoch statistics.

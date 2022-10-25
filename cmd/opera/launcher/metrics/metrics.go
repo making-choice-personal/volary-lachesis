@@ -7,7 +7,25 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	cli "gopkg.in/urfave/cli.v1"
+
+	"github.com/Fantom-foundation/go-opera/metrics/prometheus"
 )
+
+var PrometheusEndpointFlag = cli.StringFlag{
+	Name:  "metrics.prometheus.endpoint",
+	Usage: "Prometheus API endpoint to report metrics to",
+	Value: ":19090",
+}
+
+func SetupPrometheus(ctx *cli.Context) {
+	if !metrics.Enabled {
+		return
+	}
+	prometheus.SetNamespace("opera")
+	var endpoint = ctx.GlobalString(PrometheusEndpointFlag.Name)
+	prometheus.ListenTo(endpoint, nil)
+}
 
 var (
 	// TODO: refactor it
@@ -24,32 +42,19 @@ func measureDbDir() (size int64) {
 	if !ok || datadir == "" || datadir == "inmemory" {
 		return
 	}
-	return sizeOfDir(datadir)
-}
 
-func sizeOfDir(dir string) (size int64) {
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(datadir, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Debug("datadir walk", "path", path, "err", err)
-			return filepath.SkipDir
+			return err
 		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		dst, err := filepath.EvalSymlinks(path)
-		if err == nil && dst != path {
-			size += sizeOfDir(dst)
-		} else {
+		if !info.IsDir() {
 			size += info.Size()
 		}
-
-		return nil
+		return err
 	})
-
 	if err != nil {
-		log.Debug("datadir walk", "path", dir, "err", err)
+		log.Error("filepath.Walk", "path", datadir, "err", err)
+		return 0
 	}
 
 	return

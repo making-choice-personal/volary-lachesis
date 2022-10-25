@@ -19,20 +19,18 @@ package filters
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/Fantom-foundation/lachesis-base/hash"
 	"github.com/Fantom-foundation/lachesis-base/inter/idx"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	notify "github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/Fantom-foundation/go-opera/evmcore"
-	"github.com/Fantom-foundation/go-opera/gossip/evmstore"
 	"github.com/Fantom-foundation/go-opera/topicsdb"
 )
 
@@ -42,11 +40,10 @@ type Backend interface {
 	HeaderByHash(ctx context.Context, blockHash common.Hash) (*evmcore.EvmHeader, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash) ([][]*types.Log, error)
-	GetTxPosition(txid common.Hash) *evmstore.TxPosition
 
-	SubscribeNewBlockNotify(ch chan<- evmcore.ChainHeadNotify) notify.Subscription
-	SubscribeNewTxsNotify(chan<- evmcore.NewTxsNotify) notify.Subscription
-	SubscribeLogsNotify(ch chan<- []*types.Log) notify.Subscription
+	SubscribeNewBlockEvent(ch chan<- evmcore.ChainHeadNotify) notify.Subscription
+	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) notify.Subscription
+	SubscribeLogsEvent(ch chan<- []*types.Log) notify.Subscription
 
 	EvmLogIndex() *topicsdb.Index
 }
@@ -54,7 +51,6 @@ type Backend interface {
 // Filter can be used to retrieve and filter logs.
 type Filter struct {
 	backend Backend
-	config  Config
 
 	db        ethdb.Database
 	addresses []common.Address
@@ -66,9 +62,9 @@ type Filter struct {
 
 // NewRangeFilter creates a new filter which inspects the blocks to
 // figure out whether a particular block is interesting or not.
-func NewRangeFilter(backend Backend, cfg Config, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
+func NewRangeFilter(backend Backend, begin, end int64, addresses []common.Address, topics [][]common.Hash) *Filter {
 	// Create a generic filter and convert it into a range filter
-	filter := newFilter(backend, cfg, addresses, topics)
+	filter := newFilter(backend, addresses, topics)
 
 	filter.begin = begin
 	filter.end = end
@@ -78,9 +74,9 @@ func NewRangeFilter(backend Backend, cfg Config, begin, end int64, addresses []c
 
 // NewBlockFilter creates a new filter which directly inspects the contents of
 // a block to figure out whether it is interesting or not.
-func NewBlockFilter(backend Backend, cfg Config, block common.Hash, addresses []common.Address, topics [][]common.Hash) *Filter {
+func NewBlockFilter(backend Backend, block common.Hash, addresses []common.Address, topics [][]common.Hash) *Filter {
 	// Create a generic filter and convert it into a block filter
-	filter := newFilter(backend, cfg, addresses, topics)
+	filter := newFilter(backend, addresses, topics)
 
 	filter.block = block
 
@@ -89,10 +85,9 @@ func NewBlockFilter(backend Backend, cfg Config, block common.Hash, addresses []
 
 // newFilter creates a generic filter that can either filter based on a block hash,
 // or based on range queries. The search criteria needs to be explicitly set.
-func newFilter(backend Backend, cfg Config, addresses []common.Address, topics [][]common.Hash) *Filter {
+func newFilter(backend Backend, addresses []common.Address, topics [][]common.Hash) *Filter {
 	return &Filter{
 		backend:   backend,
-		config:    cfg,
 		addresses: addresses,
 		topics:    topics,
 		db:        backend.ChainDb(),
@@ -111,40 +106,32 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		if header == nil {
 			return nil, errors.New("unknown block")
 		}
-		return f.blockLogs(ctx, header.Hash)
+		return f.blockLogs(ctx, header)
 	}
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
 		return nil, nil
 	}
-	head := idx.Block(header.Number.Uint64())
+	head := header.Number.Uint64()
 
-	begin := idx.Block(f.begin)
-	if f.begin < 0 {
-		begin = head
+	if f.begin == -1 {
+		f.begin = int64(head)
 	}
-	end := idx.Block(f.end)
-	if f.end < 0 {
+	end := uint64(f.end)
+	if f.end == -1 {
 		end = head
 	}
-	if begin > end {
-		return []*types.Log{}, nil
+
+	if isEmpty(f.topics) {
+		return f.unindexedLogs(ctx, int64(end))
 	}
 
-	if isEmpty(f.topics) && len(f.addresses) == 0 {
-		return f.unindexedLogs(ctx, begin, end)
-	} else {
-		return f.indexedLogs(ctx, begin, end)
-	}
+	return f.indexedLogs(ctx, idx.Block(f.begin), idx.Block(end))
 }
 
 // indexedLogs returns the logs matching the filter criteria based on topics index.
 func (f *Filter) indexedLogs(ctx context.Context, begin, end idx.Block) ([]*types.Log, error) {
-	if end-begin > f.config.IndexedLogsBlockRangeLimit {
-		return nil, fmt.Errorf("too wide blocks range, the limit is %d", f.config.IndexedLogsBlockRangeLimit)
-	}
-
 	addresses := make([]common.Hash, len(f.addresses))
 	for i, addr := range f.addresses {
 		addresses[i] = addr.Hash()
@@ -155,44 +142,23 @@ func (f *Filter) indexedLogs(ctx context.Context, begin, end idx.Block) ([]*type
 	pattern = append(pattern, f.topics...)
 
 	logs, err := f.backend.EvmLogIndex().FindInBlocks(ctx, begin, end, pattern)
-	if err != nil {
-		return nil, err
-	}
 
-	for _, l := range logs {
-		pos := f.backend.GetTxPosition(l.TxHash)
-		if pos != nil {
-			l.TxIndex = uint(pos.BlockOffset)
-		} else {
-			log.Warn("tx index empty", "hash", l.TxHash)
-		}
-	}
-
-	return logs, nil
+	return logs, err
 }
 
 // indexedLogs returns the logs matching the filter criteria based on raw block
 // iteration.
-func (f *Filter) unindexedLogs(ctx context.Context, begin, end idx.Block) (logs []*types.Log, err error) {
-	if end-begin > f.config.UnindexedLogsBlockRangeLimit {
-		return nil, fmt.Errorf("too wide blocks range, the limit is %d", f.config.UnindexedLogsBlockRangeLimit)
-	}
-
+func (f *Filter) unindexedLogs(ctx context.Context, end int64) (logs []*types.Log, err error) {
 	var (
 		header *evmcore.EvmHeader
 		found  []*types.Log
 	)
-	for n := begin; n <= end; n++ {
-		err = ctx.Err()
-		if err != nil {
-			return
-		}
-
-		header, err = f.backend.HeaderByNumber(ctx, rpc.BlockNumber(n))
+	for ; f.begin <= end; f.begin++ {
+		header, err = f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
 			return
 		}
-		found, err = f.blockLogs(ctx, header.Hash)
+		found, err = f.blockLogs(ctx, header)
 		if err != nil {
 			return
 		}
@@ -202,9 +168,21 @@ func (f *Filter) unindexedLogs(ctx context.Context, begin, end idx.Block) (logs 
 }
 
 // blockLogs returns the logs matching the filter criteria within a single block.
-func (f *Filter) blockLogs(ctx context.Context, header common.Hash) ([]*types.Log, error) {
+func (f *Filter) blockLogs(ctx context.Context, header *evmcore.EvmHeader) (logs []*types.Log, err error) {
+	found, err := f.checkMatches(ctx, header)
+	if err != nil {
+		return
+	}
+	logs = append(logs, found...)
+
+	return
+}
+
+// checkMatches checks if the receipts belonging to the given header contain any log events that
+// match the filter criteria.
+func (f *Filter) checkMatches(ctx context.Context, header *evmcore.EvmHeader) (logs []*types.Log, err error) {
 	// Get the logs of the block
-	logsList, err := f.backend.GetLogs(ctx, header)
+	logsList, err := f.backend.GetLogs(ctx, header.Hash)
 	if err != nil {
 		return nil, err
 	}
@@ -214,11 +192,11 @@ func (f *Filter) blockLogs(ctx context.Context, header common.Hash) ([]*types.Lo
 		unfiltered = append(unfiltered, logs...)
 	}
 
-	logs := filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
+	logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
 	if len(logs) > 0 {
 		// We have matching logs, check if we need to resolve full logs via the light client
 		if logs[0].TxHash == common.Hash(hash.Zero) {
-			receipts, err := f.backend.GetReceipts(ctx, header)
+			receipts, err := f.backend.GetReceipts(ctx, header.Hash)
 			if err != nil {
 				return nil, err
 			}
